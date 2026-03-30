@@ -1,3 +1,9 @@
+# Data
+E2a/
+*.parquet
+*.csv
+metadata.xlsx
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
