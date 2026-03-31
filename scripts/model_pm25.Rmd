@@ -1,0 +1,48 @@
+---
+title: "Bayesian Hierarchical Model for PM2.5"
+author: "Nome Cognome"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# 1. Introduction
+
+This project implements a Bayesian hierarchical model to analyze daily PM2.5 concentrations across multiple monitoring stations.
+
+The objective is to account for both:
+- within-station variability (daily fluctuations)
+- between-station heterogeneity
+
+---
+
+# 2. Data and Preprocessing
+
+```{r}
+# Load libraries
+library(brms)
+library(ggplot2)
+
+# Load data
+df <- read.csv("pm25_bayes.csv")
+
+# Convert categorical variables
+df$station_id  <- factor(df$station_id)
+df$month       <- factor(df$month)
+df$day_of_week <- factor(df$day_of_week)
+
+str(df)
+summary(df)
+
+---
+
+# 2. Data and Preprocessing
+
+```{r}
+
+
+
+par(mfrow=c(1,2))
+
+hist(df$y, breaks=50, main="Distribution of y", col="lightblue")
+hist(df$log_y, breaks=50, main="Distribution of log(y)", col="lightgreen")
+
