@@ -92,3 +92,14 @@ pp_check(fit)
 saveRDS(fit, "fit_pm25.rds")
 ```
 
+The model reveals strong seasonal patterns in PM2.5 concentrations, with several months exhibiting substantially lower pollution levels compared to the reference month. In contrast, day-of-week effects are small and mostly not statistically significant.
+
+The estimated standard deviation of station-level random effects indicates meaningful heterogeneity across monitoring stations, confirming the appropriateness of a hierarchical specification.
+
+Posterior predictive checks show that the model adequately captures the distribution of the observed data.
+
+The model reveals strong seasonal patterns in PM2.5 concentrations, with several months exhibiting substantially lower pollution levels compared to the reference month. In contrast, day-of-week effects are small and mostly not statistically significant.
+
+The estimated standard deviation of station-level random effects indicates meaningful heterogeneity across monitoring stations, confirming the appropriateness of a hierarchical specification.
+
+Posterior predictive checks show that the model adequately captures the distribution of the observed data.
