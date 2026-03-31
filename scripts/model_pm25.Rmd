@@ -37,9 +37,6 @@ summary(df)
 # 3. Exploratory Data Analysis
 
 ```{r}
-
-
-
 par(mfrow=c(1,2))
 
 hist(df$y, breaks=50, main="Distribution of y", col="lightblue")
