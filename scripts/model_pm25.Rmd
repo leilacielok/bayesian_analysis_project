@@ -13,7 +13,6 @@ The objective is to account for both:
 - within-station variability (daily fluctuations)
 - between-station heterogeneity
 
----
 
 # 2. Data and Preprocessing
 
@@ -23,7 +22,7 @@ library(brms)
 library(ggplot2)
 
 # Load data
-df <- read.csv("pm25_bayes.csv")
+df <- read.csv("../pm25_bayes.csv")
 
 # Convert categorical variables
 df$station_id  <- factor(df$station_id)
@@ -41,4 +40,55 @@ par(mfrow=c(1,2))
 
 hist(df$y, breaks=50, main="Distribution of y", col="lightblue")
 hist(df$log_y, breaks=50, main="Distribution of log(y)", col="lightgreen")
+
+```
+The raw PM2.5 distribution is highly right-skewed, while the log-transformed variable appears approximately symmetric.
+
+```{r}
+# Observations per station
+obs_per_station <- table(df$station_id)
+summary(obs_per_station)
+
+hist(obs_per_station, breaks=30, main="Observations per station", col="lightgray")
+```
+
+```{r}
+# Variability Analysis
+within_var <- tapply(df$log_y, df$station_id, var)
+station_means <- tapply(df$log_y, df$station_id, mean)
+
+between_var <- var(station_means)
+
+mean(within_var)
+between_var
+```
+Within-station variability dominates, but between-station variation is non-negligible, motivating a hierarchical structure.
+
+# Model Estimation
+```{r}
+fit <- brm(
+  formula = log_y ~ month + day_of_week + (1 | station_id),
+  data = df,
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 5), class = "Intercept"),
+    prior(normal(0, 1), class = "b"),
+    prior(student_t(3, 0, 1), class = "sd"),
+    prior(student_t(3, 0, 1), class = "sigma")
+  ),
+  chains = 4,
+  iter = 4000,
+  warmup = 2000,
+  cores = 4,
+  seed = 123
+)
+```
+```{r}
+summary(fit)
+plot(fit)
+pp_check(fit)
+```
+```{r}
+saveRDS(fit, "fit_pm25.rds")
+```
 
