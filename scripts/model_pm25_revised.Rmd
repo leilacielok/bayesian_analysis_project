@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 set.seed(123)
 ```
 
-# 1. Introduction
+# Introduction
 
 This project implements a Bayesian hierarchical model for daily PM2.5 concentrations observed across multiple monitoring stations. The outcome is modeled on the log scale to account for right-skewness in the raw data.
 
@@ -35,12 +35,13 @@ A Metropolis-within-Gibbs sampler is used:
 - Gibbs updates for \(\beta\), \(\alpha_j\), and \(\sigma^2\)
 - a Metropolis-Hastings step for \(\tau\)
 
-# 2. Libraries and data import
+# 1. Libraries and data import
 
 ```{r libraries}
 library(dplyr)
 library(ggplot2)
 library(readr)
+library(e1071)
 library(tidyr)
 library(stringr)
 library(purrr)
@@ -50,8 +51,180 @@ library(purrr)
 df <- read_csv("../pm25_bayes.csv", show_col_types = FALSE)
 str(df)
 df$Pollutant <- NULL
+df <- df %>%
+  mutate(
+    Start = as.Date(Start),
+    month = factor(month),
+    day_of_week = factor(
+      day_of_week,
+      levels = 0:6,
+      labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    )
+  )
 summary(df)
 ```
+# 2 EDA
+## 2.1: outcome variable
+```{r eda-outcome, message=FALSE, warning=FALSE}
+# Basic summary statistics
+outcome_var <- "y"
+
+summary(df[[outcome_var]])
+
+# Missing and non-positive values
+cat("Number of missing values:", sum(is.na(df[[outcome_var]])), "\n")
+cat("Number of non-positive values:", sum(df[[outcome_var]] <= 0, na.rm = TRUE), "\n")
+
+# Histogram of raw outcome
+ggplot(df, aes(x = .data[[outcome_var]])) +
+  geom_histogram(bins = 40) +
+  labs(
+    title = "Distribution of the raw PM2.5 outcome",
+    x = outcome_var,
+    y = "Frequency"
+  )
+
+# Skeweness of raw data
+skew_raw <- skewness(df[[outcome_var]], na.rm = TRUE)
+cat("Skewness (raw):", skew_raw, "\n")
+
+# Histogram of log-transformed outcome
+df_pos <- df %>% filter(.data[[outcome_var]] > 0)
+
+ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
+  geom_histogram(bins = 40) +
+  labs(
+    title = "Distribution of the log-transformed PM2.5 outcome",
+    x = paste0("log(", outcome_var, ")"),
+    y = "Frequency"
+  )
+
+# Skeweness of log data
+skew_log <- skewness(log(df[[outcome_var]]), na.rm = TRUE)
+cat("Skewness (log):", skew_log, "\n")
+
+# Compare raw and log-scale summaries
+cat("\nSummary of raw outcome:\n")
+print(summary(df_pos[[outcome_var]]))
+
+cat("\nSummary of log-transformed outcome:\n")
+print(summary(log(df_pos[[outcome_var]])))
+```
+
+## 2.2: data
+```{r eda-panel-structure, message=FALSE, warning=FALSE}
+# 1. Observations per station
+obs_per_station <- df %>%
+  count(station_id, name = "n_obs") %>%
+  arrange(desc(n_obs))
+
+cat("Number of stations:", n_distinct(df$station_id), "\n")
+cat("Min observations per station:", min(obs_per_station$n_obs), "\n")
+cat("Median observations per station:", median(obs_per_station$n_obs), "\n")
+cat("Max observations per station:", max(obs_per_station$n_obs), "\n")
+
+head(obs_per_station, 10)
+
+ggplot(obs_per_station, aes(x = n_obs)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Distribution of observations per station",
+    x = "Number of observations",
+    y = "Frequency"
+  )
+
+# 2a Observations per month
+obs_per_month <- df %>%
+  count(month, name = "n_obs") %>%
+  arrange(month)
+
+print(obs_per_month)
+
+ggplot(obs_per_month, aes(x = factor(month), y = n_obs)) +
+  geom_col() +
+  labs(
+    title = "Number of observations by month",
+    x = "Month",
+    y = "Number of observations"
+  )
+
+# 2b Observations per day of week
+obs_per_day <- df %>%
+  count(day_of_week, name = "n_obs")
+
+print(obs_per_day)
+
+ggplot(obs_per_day, aes(x = day_of_week, y = n_obs)) +
+  geom_col() +
+  labs(
+    title = "Number of observations by day of week",
+    x = "Day of week",
+    y = "Number of observations"
+  )
+
+# 3. Station-month panel structure
+station_month <- df %>%
+  distinct(station_id, month) %>%
+  count(station_id, name = "n_months_present") %>%
+  arrange(n_months_present, station_id)
+
+cat("Min number of months observed per station:", min(station_month$n_months_present), "\n")
+cat("Median number of months observed per station:", median(station_month$n_months_present), "\n")
+cat("Max number of months observed per station:", max(station_month$n_months_present), "\n")
+
+head(station_month, 10)
+
+# 4. Full station x month table and missing months
+station_month_full <- expand_grid(
+  station_id = sort(unique(df$station_id)),
+  month = sort(unique(df$month))
+) %>%
+  left_join(
+    df %>%
+      count(station_id, month, name = "n_obs"),
+    by = c("station_id", "month")
+  ) %>%
+  mutate(
+    n_obs = ifelse(is.na(n_obs), 0, n_obs),
+    missing_month = ifelse(n_obs == 0, 1, 0)
+  )
+
+missing_months_by_station <- station_month_full %>%
+  group_by(station_id) %>%
+  summarise(
+    missing_months = sum(missing_month),
+    months_observed = sum(n_obs > 0),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(missing_months), station_id)
+
+cat("Stations with at least one completely missing month:",
+    sum(missing_months_by_station$missing_months > 0), "\n")
+
+head(missing_months_by_station, 15)
+
+# Optional: show which months are missing for each station
+missing_month_detail <- station_month_full %>%
+  filter(n_obs == 0) %>%
+  arrange(station_id, month)
+
+head(missing_month_detail, 20)
+
+# Heatmap of data availability by station and month
+ggplot(station_month_full, aes(x = factor(month), y = factor(station_id), fill = n_obs)) +
+  geom_tile() +
+  labs(
+    title = "Data availability by station and month",
+    x = "Month",
+    y = "Station ID",
+    fill = "N obs"
+  ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+```
+Exploratory analysis shows that the raw PM2.5 outcome is highly right-skewed, with a skewness of 17.06 and a long upper tail driven by extreme observations. After log transformation, skewness drops to -0.29, yielding a much more symmetric distribution and supporting the use of a Gaussian likelihood for the transformed outcome.
+
+The panel structure is markedly unbalanced across monitoring stations. The number of observations per station ranges from 69 to 332, with a median of 299.5. The dataset is also uneven across months: while most months contain between roughly 2,600 and 3,100 observations, January is severely underrepresented, with only 177 observations. Moreover, 32 stations exhibit at least one completely missing month, and the minimum temporal coverage is only 4 months for some stations. These features support the use of a hierarchical specification, which is well suited to unbalanced grouped data.
 
 # 3. Data preprocessing
 
