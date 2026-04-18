@@ -229,80 +229,27 @@ The panel structure is markedly unbalanced across monitoring stations. The numbe
 # 3. Data preprocessing
 
 ```{r preprocessing}
-# If log_y is not already present, create it from y or Value
-if (!"log_y" %in% names(df)) {
-  if ("y" %in% names(df)) {
-    df <- df %>% mutate(log_y = log(y))
-  } else if ("Value" %in% names(df)) {
-    df <- df %>% mutate(log_y = log(Value))
-  } else {
-    stop("Neither log_y nor y/Value is available in the dataset.")
-  }
-}
-
-# Convert categorical variables
-# Keep explicit reference levels if you want stable interpretation
+# Create log outcome and keep only finite values
 df <- df %>%
+  mutate(log_y = log(.data[[outcome_var]])) %>%
+  filter(is.finite(log_y))
+
+# Keep only variables used in the model and clean them
+model_vars <- c("log_y", "station_id", "month", "day_of_week")
+
+df_model <- df %>%
+  dplyr::select(all_of(model_vars)) %>%
+  drop_na() %>%
   mutate(
     station_id = factor(station_id),
     month = factor(month),
     day_of_week = factor(day_of_week)
   )
 
-# Optional: reorder levels if needed
-# df$month <- factor(df$month, levels = c("1","2","3",...))
-# df$day_of_week <- factor(df$day_of_week,
-#                          levels = c("Monday","Tuesday","Wednesday","Thursday",
-#                                     "Friday","Saturday","Sunday"))
-
-# Keep only complete cases for the model variables
-model_vars <- c("log_y", "station_id", "month", "day_of_week")
-df_model <- df %>%
-  select(all_of(model_vars)) %>%
-  drop_na()
-
 cat("Number of observations:", nrow(df_model), "\n")
 cat("Number of stations:", n_distinct(df_model$station_id), "\n")
-```
 
-## 3.1 Optional standardization of continuous covariates
-
-In the current specification, `month` and `day_of_week` are categorical, so there is nothing to standardize among the regressors. If later you add continuous covariates, standardize only those columns, not the outcome and not dummy variables.
-
-```{r standardization-helper}
-standardize_vars <- function(data, vars) {
-  data %>%
-    mutate(across(all_of(vars), ~ as.numeric(scale(.x)), .names = "{.col}_std"))
-}
-
-# Example (ONLY if you later add continuous regressors):
-# df_model <- standardize_vars(df_model, c("temperature", "humidity"))
-```
-
-# 4. Exploratory analysis
-
-```{r eda-plots, fig.width=10, fig.height=4}
-p1 <- ggplot(df_model, aes(log_y)) +
-  geom_histogram(bins = 50) +
-  labs(title = "Distribution of log(PM2.5)")
-
-# If raw y exists in the original dataset, compare with log_y
-p2 <- NULL
-if ("y" %in% names(df)) {
-  p2 <- ggplot(df, aes(y)) +
-    geom_histogram(bins = 50) +
-    labs(title = "Distribution of raw PM2.5")
-} else if ("Value" %in% names(df)) {
-  p2 <- ggplot(df, aes(Value)) +
-    geom_histogram(bins = 50) +
-    labs(title = "Distribution of raw PM2.5")
-}
-
-print(p1)
-if (!is.null(p2)) print(p2)
-```
-
-```{r eda-summary}
+# Summary of transformed outcome
 df_model %>%
   summarise(
     n = n(),
@@ -324,6 +271,8 @@ y_tilde <- df_model$log_y
 
 # Group index for stations
 station_index <- as.integer(df_model$station_id)
+
+# Dimensions
 J <- nlevels(df_model$station_id)
 n <- length(y_tilde)
 p <- ncol(X)
@@ -336,24 +285,58 @@ cat("p =", p, "\n")
 cat("J =", J, "\n")
 ```
 
+```{r}
+# check
+head(X)
+table(df_model$month)
+table(df_model$day_of_week)
+summary(df_model$station_id)
+```
 # 6. Prior specification
 
-```{r priors}
-# Prior for beta ~ N(b0, B0)
-# Baseline choice; change c_prior for sensitivity analysis
-c_prior <- 100
+```{r priors-and-initialization}
+# -----------------------------
+# Prior hyperparameters
+# -----------------------------
+
+# beta ~ N(b0, B0)
+c_beta <- 100
 b0 <- rep(0, p)
-B0 <- diag(c_prior, p)
+B0 <- diag(c_beta, p)
 B0_inv <- solve(B0)
 
-# Prior for sigma^2 ~ IG(a_sigma, b_sigma)
+# sigma2 ~ IG(a_sigma, b_sigma)
 a_sigma <- 2
-b_sigma <- 0.5   # can compare with 1 in sensitivity analysis
+b_sigma <- 0.5
 
-# Prior for tau ~ Half-Cauchy(0, A)
-A_tau <- 5       # can compare with 2.5 and 10 in sensitivity analysis
+# tau ~ Half-Cauchy(0, A)
+A_tau <- 5
 
-list(c_prior = c_prior, a_sigma = a_sigma, b_sigma = b_sigma, A_tau = A_tau)
+# -----------------------------
+# MCMC settings
+# -----------------------------
+n_iter <- 5000
+burn_in <- 1000
+
+# proposal sd for log(tau)
+proposal_sd_tau <- 0.15
+
+# -----------------------------
+# Initial values
+# -----------------------------
+beta_curr <- rep(0, p)
+alpha_curr <- rep(0, J)
+sigma2_curr <- var(y_tilde)
+tau_curr <- 1
+
+# -----------------------------
+# Storage
+# -----------------------------
+beta_store <- matrix(NA_real_, nrow = n_iter, ncol = p)
+alpha_store <- matrix(NA_real_, nrow = n_iter, ncol = J)
+sigma2_store <- numeric(n_iter)
+tau_store <- numeric(n_iter)
+accept_tau <- logical(n_iter)
 ```
 
 # 7. Full conditional formulas used in the sampler
@@ -394,7 +377,7 @@ For \(\tau\), the full conditional is only known up to proportionality, so a Met
 
 ```{r utility-functions}
 # Draw from Inverse-Gamma(shape, scale) under the convention:
-# p(x) propto x^{-(a+1)} exp(-b/x)
+# p(x) prop to x^{-(a+1)} exp(-b/x)
 # If G ~ Gamma(shape=a, rate=b), then 1/G ~ IG(a,b)
 rinvgamma <- function(n, shape, scale) {
   1 / rgamma(n, shape = shape, rate = scale)
@@ -406,6 +389,18 @@ log_target_eta <- function(eta, alpha, A_tau) {
   S_alpha <- sum(alpha^2)
   -(J - 1) * eta - S_alpha / (2 * exp(2 * eta)) - log(1 + exp(2 * eta) / A_tau^2)
 }
+```
+
+```{r}
+any(is.na(station_index))
+range(station_index, na.rm = TRUE)
+table(station_index)[1:10]
+sum(station_index == 0, na.rm = TRUE)
+sum(station_index > length(n_j), na.rm = TRUE)
+```
+```{r}
+head(station_index, 20)
+tail(station_index, 20)
 ```
 
 # 9. Metropolis-within-Gibbs sampler
@@ -423,6 +418,11 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
   p <- ncol(X)
   J <- length(n_j)
   B0_inv <- solve(B0)
+
+  if (any(is.na(station_index))) stop("station_index contains NA")
+  if (min(station_index) < 1) stop("station_index contains values < 1")
+  if (max(station_index) > J) stop("station_index exceeds number of groups")
+  if (burn_in >= n_iter) stop("burn_in must be smaller than n_iter")
 
   # Storage
   beta_store <- matrix(NA_real_, nrow = n_iter, ncol = p)
@@ -443,8 +443,20 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
 
     # ---- 1. Gibbs update for beta ----
     alpha_vec <- alpha_curr[station_index]
-    V_beta <- solve(B0_inv + XtX / sigma2_curr)
-    m_beta <- V_beta %*% (B0_inv %*% b0 + crossprod(X, y_tilde - alpha_vec) / sigma2_curr)
+
+    precision_beta <- B0_inv + XtX / sigma2_curr
+    V_beta <- solve(precision_beta)
+    V_beta <- 0.5 * (V_beta + t(V_beta))
+
+    term_prior <- B0_inv %*% b0
+    term_lik <- crossprod(X, y_tilde - alpha_vec) / sigma2_curr
+    rhs_beta <- term_prior + term_lik
+    m_beta <- solve(precision_beta, rhs_beta)
+
+    if (any(!is.finite(m_beta))) {
+      stop(paste("m_beta contains non-finite values at iteration", t))
+    }
+
     beta_curr <- as.numeric(MASS::mvrnorm(1, mu = as.numeric(m_beta), Sigma = V_beta))
 
     # ---- 2. Gibbs updates for alpha_j ----
@@ -452,7 +464,7 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
 
     for (j in seq_len(J)) {
       idx <- which(station_index == j)
-      V_j <- 1 / (length(idx) / sigma2_curr + 1 / (tau_curr^2))
+      V_j <- 1 / (n_j[j] / sigma2_curr + 1 / (tau_curr^2))
       m_j <- V_j * sum(y_tilde[idx] - xb[idx]) / sigma2_curr
       alpha_curr[j] <- rnorm(1, mean = m_j, sd = sqrt(V_j))
     }
@@ -461,6 +473,10 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
     resid <- y_tilde - xb - alpha_curr[station_index]
     SSR <- sum(resid^2)
     sigma2_curr <- rinvgamma(1, shape = a_sigma + n / 2, scale = b_sigma + SSR / 2)
+
+    if (!is.finite(sigma2_curr) || sigma2_curr <= 0) {
+      stop(paste("sigma2_curr became invalid at iteration", t))
+    }
 
     # ---- 4. MH update for tau on log scale ----
     eta_curr <- log(tau_curr)
@@ -495,7 +511,8 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
     post_alpha = alpha_store[kept, , drop = FALSE],
     post_sigma2 = sigma2_store[kept],
     post_tau = tau_store[kept],
-    accept_rate_tau = mean(accept_tau[kept])
+    accept_rate_tau = mean(accept_tau[kept]),
+    accept_rate_tau_all = mean(accept_tau)
   )
 }
 ```
@@ -516,13 +533,14 @@ mcmc_fit <- run_mwg_sampler(
   a_sigma = a_sigma,
   b_sigma = b_sigma,
   A_tau = A_tau,
-  n_iter = 6000,
-  burn_in = 1000,
+  n_iter = 3000,
+  burn_in = 500,
   proposal_sd = 0.12,
   seed = 123
 )
 
 mcmc_fit$accept_rate_tau
+mcmc_fit$accept_rate_tau_all
 ```
 
 # 11. Posterior summaries
@@ -534,27 +552,27 @@ beta_summary <- data.frame(
   parameter = beta_names,
   mean = apply(mcmc_fit$post_beta, 2, mean),
   sd = apply(mcmc_fit$post_beta, 2, sd),
-  q2.5 = apply(mcmc_fit$post_beta, 2, quantile, probs = 0.025),
-  q50 = apply(mcmc_fit$post_beta, 2, quantile, probs = 0.50),
-  q97.5 = apply(mcmc_fit$post_beta, 2, quantile, probs = 0.975)
+  q2.5 = apply(mcmc_fit$post_beta, 2, function(x) as.numeric(quantile(x, 0.025))),
+  q50 = apply(mcmc_fit$post_beta, 2, function(x) as.numeric(quantile(x, 0.50))),
+  q97.5 = apply(mcmc_fit$post_beta, 2, function(x) as.numeric(quantile(x, 0.975)))
 )
 
 sigma2_summary <- data.frame(
   parameter = "sigma2",
   mean = mean(mcmc_fit$post_sigma2),
   sd = sd(mcmc_fit$post_sigma2),
-  q2.5 = quantile(mcmc_fit$post_sigma2, 0.025),
-  q50 = quantile(mcmc_fit$post_sigma2, 0.50),
-  q97.5 = quantile(mcmc_fit$post_sigma2, 0.975)
+  q2.5 = as.numeric(quantile(mcmc_fit$post_sigma2, 0.025)),
+  q50 = as.numeric(quantile(mcmc_fit$post_sigma2, 0.50)),
+  q97.5 = as.numeric(quantile(mcmc_fit$post_sigma2, 0.975))
 )
 
 tau_summary <- data.frame(
   parameter = "tau",
   mean = mean(mcmc_fit$post_tau),
   sd = sd(mcmc_fit$post_tau),
-  q2.5 = quantile(mcmc_fit$post_tau, 0.025),
-  q50 = quantile(mcmc_fit$post_tau, 0.50),
-  q97.5 = quantile(mcmc_fit$post_tau, 0.975)
+  q2.5 = as.numeric(quantile(mcmc_fit$post_tau, 0.025)),
+  q50 = as.numeric(quantile(mcmc_fit$post_tau, 0.50)),
+  q97.5 = as.numeric(quantile(mcmc_fit$post_tau, 0.975))
 )
 
 beta_summary
@@ -573,6 +591,20 @@ plot(mcmc_fit$post_tau, type = "l", main = expression(tau), ylab = "")
 hist(mcmc_fit$post_sigma2, breaks = 40, main = expression(posterior~sigma^2), xlab = expression(sigma^2))
 hist(mcmc_fit$post_tau, breaks = 40, main = expression(posterior~tau), xlab = expression(tau))
 ```
+
+# 12a Trace plots
+```{r}
+plot(mcmc_fit$tau, type = "l", main = "Trace plot for tau", ylab = "tau", xlab = "Iteration")
+plot(mcmc_fit$sigma2, type = "l", main = "Trace plot for sigma2", ylab = "sigma2", xlab = "Iteration")
+plot(mcmc_fit$beta[,1], type = "l", main = "Trace plot for beta_0", ylab = "beta_0", xlab = "Iteration")
+plot(mcmc_fit$beta[,2], type = "l", main = "Trace plot for month coefficient", ylab = "beta", xlab = "Iteration")
+```
+# 12b Posterior densities
+```{r}
+hist(mcmc_fit$post_tau, breaks = 30, main = "Posterior of tau", xlab = "tau")
+hist(mcmc_fit$post_sigma2, breaks = 30, main = "Posterior of sigma2", xlab = "sigma2")
+```
+
 
 # 13. Sensitivity analysis skeleton
 
