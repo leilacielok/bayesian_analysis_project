@@ -64,7 +64,7 @@ df <- df %>%
 summary(df)
 ```
 # 2 EDA
-## 2.1: outcome variable
+## Outcome variable
 ```{r eda-outcome, message=FALSE, warning=FALSE}
 # Basic summary statistics
 outcome_var <- "y"
@@ -111,7 +111,7 @@ cat("\nSummary of log-transformed outcome:\n")
 print(summary(log(df_pos[[outcome_var]])))
 ```
 
-## 2.2: data
+## Data
 ```{r eda-panel-structure, message=FALSE, warning=FALSE}
 # 1. Observations per station
 obs_per_station <- df %>%
@@ -260,7 +260,7 @@ df_model %>%
   )
 ```
 
-# 5. Design matrices and indexing
+# 4. Design matrices and indexing
 
 ```{r design-matrices}
 # Fixed-effects matrix
@@ -506,7 +506,7 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
 }
 ```
 
-# 9b. Postprocessing
+## Postprocessing formula
 ```{r}
 post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
   n_iter <- nrow(mcmc_fit$beta)
@@ -550,7 +550,7 @@ mcmc_fit <- run_mwg_sampler(
 
 mcmc_fit$accept_rate_tau_all
 ```
-# 10b. Trace plots
+## Visualization: Trace plots
 
 ```{r trace-plots, fig.width=10, fig.height=8}
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
@@ -586,7 +586,7 @@ for (j in alpha_idx) {
 }
 ```
 
-# 10c. ACF
+## Visualization: ACF
 ```{r acf-plots, fig.width=10, fig.height=8}
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 
@@ -612,7 +612,7 @@ for (j in alpha_idx) {
 }
 ```
 
-# 10d. Choose burn in iterations
+## Choose burn in iterations
 ```{r choose-burnin}
 burn_in <- 200
 
@@ -621,7 +621,7 @@ post <- post_process_mcmc(mcmc_fit, burn_in = burn_in, thin = 5)
 post$accept_rate_tau
 ```
 
-#10e. Trace plots after burn-in
+## Trace plots post burn-in
 ```{r post-burnin-trace, fig.width=10, fig.height=8}
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 
@@ -644,7 +644,7 @@ plot(post$post_tau, type = "l",
 ### Visual inspection
 The trace plots of the post-burn-in chains show no evidence of non-stationarity or systematic trends. All parameters fluctuate around stable levels, suggesting that the burn-in period has successfully removed the initial transient phase. The chains exhibit satisfactory mixing, although some residual autocorrelation is visible for selected parameters. Overall, the visual inspection supports convergence and justifies the use of the retained samples for posterior inference.
 
-# 10f. ACF post burn-in
+## ACF post burn-in
 ```{r post-burnin-acf, fig.width=10, fig.height=8}
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 
@@ -660,7 +660,7 @@ acf(post$post_sigma2,
 acf(post$post_tau,
     main = expression(paste("Post-burn-in ACF of ", tau)))
 ```
-# 10g. ESS
+## ESS
 ```{r}
 library(coda)
 
@@ -674,7 +674,6 @@ effectiveSize(mcmc_alpha)
 effectiveSize(mcmc_sigma2)
 effectiveSize(mcmc_tau)
 ```
-
 
 Due to autocorrelation in the MCMC draws, the effective sample size (ESS) is used to assess the amount of independent information in the chain. The ESS values are sufficiently large, indicating good mixing of the sampler.
 
@@ -751,7 +750,7 @@ run_one_spec <- function(c_prior, A_tau, b_sigma,
 }
 ```
 
-# One-at-a-time sensitivity analysis
+## One-at-a-time sensitivity analysis
 
 ```{r sensitivity-runs}
 baseline_row <- data.frame(
@@ -780,7 +779,7 @@ sensitivity_results
 The sensitivity analysis shows that posterior estimates are remarkably stable across a wide range of prior specifications. In particular, the posterior mean of the intercept, the residual variance σ^2, and the hyperparameter τ remain virtually unchanged when varying the prior scale c, the hyperparameter A, and the inverse-gamma parameter b_σ. As expected, the hyperparameter τ shows slightly higher sensitivity compared to the regression coefficients, although the magnitude of variation remains negligible.
 This suggests that the data are highly informative and that the posterior distribution is largely driven by the likelihood rather than the prior. The results are therefore robust to reasonable prior choices.
 
-# 14. CODA: GEWEKE
+# 14. CODA: Geweke Diagnostics
 ```{r geweke-diagnostic, message=FALSE, warning=FALSE}
 library(coda)
 
@@ -815,7 +814,7 @@ alpha_geweke
 The Geweke diagnostic provides no evidence against convergence. All z-scores are well below the conventional threshold of 1.96 in absolute value, both for the main model parameters and for the selected random effects. This finding is consistent with the visual inspection of the trace plots and supports the use of the retained draws for posterior inference.
 
 
-# 15. PPC
+# 15. Posterior Predictive Checks
 ```{r}
 # Number of posterior draws to use for PPC
 S <- min(100, nrow(post$post_beta))
