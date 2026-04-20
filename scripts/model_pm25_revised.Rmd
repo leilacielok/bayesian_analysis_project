@@ -210,7 +210,7 @@ cat("Stations with at least one completely missing month:",
 
 head(missing_months_by_station, 15)
 
-# Optional: show which months are missing for each station
+# Months missing for each station
 missing_month_detail <- station_month_full %>%
   filter(n_obs == 0) %>%
   arrange(station_id, month)
