@@ -3,6 +3,9 @@ E2a/
 *.parquet
 metadata.xlsx
 
+# R proj
+bayesian_analysis.Rproj
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
