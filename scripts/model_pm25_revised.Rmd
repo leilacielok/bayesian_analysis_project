@@ -726,6 +726,7 @@ acf(post$post_tau,
     main = expression(paste("Post-burn-in ACF of ", tau)))
 ```
 ## ESS
+
 ```{r}
 library(coda)
 
@@ -928,7 +929,6 @@ abline(v = obs_sd, lwd = 2, lty = 2)
 par(mfrow = c(1, 1))
 ```
 
-## Visualization
 ```{r}
 plot(density(y_tilde),
      lwd = 2,
