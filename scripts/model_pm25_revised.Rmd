@@ -529,7 +529,7 @@ post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
 
 # 10. Run the sampler
 
-```{r run-sampler}
+```{r run-sampler, cache = TRUE}
 # MASS::mvrnorm is used inside the function
 library(MASS)
 
@@ -709,7 +709,7 @@ This section presents a simple sensitivity analysis to compare prior choices suc
 - \(A \in \{2.5, 5, 10\}\) for the half-Cauchy prior on \(\tau\)
 - \(b_\sigma \in \{0.5, 1\}\) for the inverse-gamma prior on \(\sigma^2\)
 
-```{r sensitivity-template}
+```{r sensitivity-template, cache = TRUE}
 run_one_spec <- function(c_prior, A_tau, b_sigma,
                          scenario = NA_character_,
                          n_iter = 5000,
