@@ -7,6 +7,10 @@ output:
     toc: true
     toc_float: true
     number_sections: true
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
@@ -20,20 +24,23 @@ This project implements a Bayesian hierarchical model for daily PM2.5 concentrat
 
 The specification is:
 
-\[
-\tilde y_i = \log(y_i), \qquad
-\tilde y_i \mid \beta, \alpha, \sigma^2 \sim \mathcal N(x_i'\beta + \alpha_{j[i]}, \sigma^2)
-\]
+$$
+\tilde y_i = \log(y_i),
+\qquad
+\tilde y_i \mid \beta, \alpha, \sigma^2 \sim \mathcal N(X_i^\top \beta + \alpha_{j[i]}, \sigma^2)
+$$
 
 with station-specific random intercepts
 
-\[
-\alpha_j \mid \tau \sim \mathcal N(0, \tau^2), \qquad j = 1, \dots, J.
-\]
+$$
+\alpha_j \mid \tau \sim \mathcal N(0, \tau^2),
+\qquad j = 1, \dots, J.
+$$
 
 A Metropolis-within-Gibbs sampler is used:
-- Gibbs updates for \(\beta\), \(\alpha_j\), and \(\sigma^2\)
-- a Metropolis-Hastings step for \(\tau\)
+- Gibbs updates for $\beta$, $\alpha_j$, and $\sigma^2$
+- a Metropolis-Hastings step for $\tau$
+
 
 # 1. Libraries and data import
 
@@ -292,7 +299,45 @@ table(df_model$month)
 table(df_model$day_of_week)
 summary(df_model$station_id)
 ```
-# 6. Prior specification
+# 6. Prior specifications
+
+Weakly informative priors are adopted for all model parameters, reflecting limited prior knowledge while ensuring posterior regularization.
+
+For the regression coefficients, a multivariate normal prior is assumed:
+
+$$
+\beta \sim \mathcal N(b_0, B_0),
+$$
+
+where $b_0$ is a prior mean vector and $B_0 = cI$ is a diagonal covariance matrix with $c$ controlling the prior variance.
+
+For the station-specific random effects, I specify:
+
+$$
+\alpha_j \mid \tau \sim \mathcal N(0, \tau^2), \qquad j = 1, \dots, J,
+$$
+
+which induces partial pooling across monitoring stations.
+
+For the observation noise variance, an inverse-gamma prior is assumed:
+
+$$
+\sigma^2 \sim \mathrm{IG}(a_\sigma, b_\sigma),
+$$
+
+with small values of $a_\sigma$ and $b_\sigma$ to obtain a weakly informative specification.
+
+Finally, for the scale parameter of the random effects, a half-Cauchy prior is used:
+
+$$
+\tau \sim \mathrm{C}^+(0, A),
+$$
+
+which is commonly recommended for hierarchical variance components due to its heavy tails and robustness properties.
+
+These choices are motivated by both modeling and computational considerations. 
+In particular, conjugate priors are adopted for $\beta$, $\alpha_j$, and $\sigma^2$ to allow for efficient Gibbs updates, while a non-conjugate prior is specified for $\tau$, requiring a Metropolis–Hastings step. 
+Overall, the specification ensures sufficient flexibility while preventing overfitting, and will be further assessed through a prior sensitivity analysis.
 
 ```{r priors-and-initialization}
 # -----------------------------
@@ -339,39 +384,58 @@ tau_store <- numeric(n_iter)
 accept_tau <- logical(n_iter)
 ```
 
-# 7. Full conditional formulas used in the sampler
+# 7. Full conditional conditional posterior distributions specification
 
-The sampler uses the following updates:
+The full conditional posterior distributions are derived and passed to the Gibbs sampling algorithm:
 
-\[
+$$
 \beta \mid \cdot \sim \mathcal N(m_\beta, V_\beta)
-\]
+$$
 
 with
 
-\[
-V_\beta = \left(B_0^{-1} + \frac{1}{\sigma^2}X'X\right)^{-1},
+$$
+V_\beta = \left(B_0^{-1} + \frac{1}{\sigma^2}X^\top X\right)^{-1},
 \qquad
-m_\beta = V_\beta\left(B_0^{-1}b_0 + \frac{1}{\sigma^2}X'(\tilde y - Z\alpha)\right)
-\]
+m_\beta = V_\beta\left(B_0^{-1}b_0 + \frac{1}{\sigma^2}X^\top(\tilde y - Z\alpha)\right)
+$$
 
-\[
+$$
 \alpha_j \mid \cdot \sim \mathcal N(m_j, V_j)
-\]
+$$
 
 with
 
-\[
+$$
 V_j = \left(\frac{n_j}{\sigma^2} + \frac{1}{\tau^2}\right)^{-1},
 \qquad
-m_j = V_j\frac{1}{\sigma^2}\sum_{i \in j}(\tilde y_i - x_i'\beta)
-\]
+m_j = V_j \frac{1}{\sigma^2} \sum_{i \in j} (\tilde y_i - x_i^\top \beta)
+$$
 
-\[
-\sigma^2 \mid \cdot \sim IG\left(a_\sigma + \frac{n}{2}, b_\sigma + \frac{SSR}{2}\right)
-\]
+$$
+\sigma^2 \mid \cdot \sim \mathrm{IG}\left(a_\sigma + \frac{n}{2},\; b_\sigma + \frac{SSR}{2}\right)
+$$
 
-For \(\tau\), the full conditional is only known up to proportionality, so a Metropolis-Hastings step is used.
+where
+
+$$
+SSR = \sum_{i=1}^n (\tilde y_i - x_i^\top \beta - \alpha_{j[i]})^2.
+$$
+
+The full conditional distribution of $\tau$ is not available in closed form. 
+Up to proportionality, it is given by:
+
+$$
+p(\tau \mid \alpha) \propto \left[ \prod_{j=1}^J \mathcal N(\alpha_j \mid 0, \tau^2) \right] \cdot p(\tau)
+$$
+
+Assuming a half-Cauchy prior $\tau \sim \text{C}^+(0, A)$, this yields:
+
+$$
+p(\tau \mid \alpha) \propto \tau^{-J} \exp\left(-\frac{1}{2\tau^2} \sum_{j=1}^J \alpha_j^2 \right) \cdot \frac{1}{1 + (\tau/A)^2}
+$$
+
+This distribution does not belong to a standard family, hence we use a Metropolis–Hastings step within the Gibbs sampler.
 
 # 8. Utility functions for the sampler
 
@@ -698,15 +762,16 @@ beta_summary
 sigma2_summary
 tau_summary
 ```
-Inspection of the trace plots suggested only a short transient phase, so the first 200 iterations were discarded as burn-in. Residual autocorrelation remained for some parameters, especially the intercept and selected random effects; therefore, a mild thinning scheme (every 5th draw) was applied. The retained chains appeared stable, and the acceptance rate for the Metropolis-Hastings update of τ was satisfactory.
+Inspection of the trace plots suggested only a short transient phase, so the first 200 iterations were discarded as burn-in. Residual autocorrelation remained for some parameters, especially the intercept and selected random effects; therefore, a mild thinning scheme (every 5th draw) was applied. The retained chains appeared stable, and the acceptance rate for the Metropolis-Hastings update of $\tau$ was satisfactory.
 
 
-# 13. Sensitivity analysis skeleton
+# 13. Sensitivity analysis
 
-This section presents a simple sensitivity analysis to compare prior choices such as:
-- \(c \in \{10, 100, 1000\}\) for \(B_0 = cI\)
-- \(A \in \{2.5, 5, 10\}\) for the half-Cauchy prior on \(\tau\)
-- \(b_\sigma \in \{0.5, 1\}\) for the inverse-gamma prior on \(\sigma^2\)
+This section presents a simple sensitivity analysis to assess the robustness of posterior inference to prior choices. In particular, I consider:
+
+- $c \in \{10, 100, 1000\}$ for the prior covariance $B_0 = cI$
+- $A \in \{2.5, 5, 10\}$ for the half-Cauchy prior on $\tau$
+- $b_\sigma \in \{0.5, 1\}$ for the inverse-gamma prior on $\sigma^2$
 
 ```{r sensitivity-template, cache = TRUE}
 run_one_spec <- function(c_prior, A_tau, b_sigma,
@@ -776,7 +841,7 @@ sensitivity_results <- bind_rows(
 sensitivity_results
 ```
 
-The sensitivity analysis shows that posterior estimates are remarkably stable across a wide range of prior specifications. In particular, the posterior mean of the intercept, the residual variance σ^2, and the hyperparameter τ remain virtually unchanged when varying the prior scale c, the hyperparameter A, and the inverse-gamma parameter b_σ. As expected, the hyperparameter τ shows slightly higher sensitivity compared to the regression coefficients, although the magnitude of variation remains negligible.
+The sensitivity analysis shows that posterior estimates are remarkably stable across a wide range of prior specifications. In particular, the posterior mean of the intercept, the residual variance $\sigma^2$, and the hyperparameter $\tau$ remain virtually unchanged when varying the prior scale c, the hyperparameter A, and the inverse-gamma parameter $b_\sigma$. As expected, the hyperparameter $\tau$ shows slightly higher sensitivity compared to the regression coefficients, although the magnitude of variation remains negligible.
 This suggests that the data are highly informative and that the posterior distribution is largely driven by the likelihood rather than the prior. The results are therefore robust to reasonable prior choices.
 
 # 14. CODA: Geweke Diagnostics
