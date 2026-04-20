@@ -391,24 +391,12 @@ log_target_eta <- function(eta, alpha, A_tau) {
 }
 ```
 
-```{r}
-any(is.na(station_index))
-range(station_index, na.rm = TRUE)
-table(station_index)[1:10]
-sum(station_index == 0, na.rm = TRUE)
-sum(station_index > length(n_j), na.rm = TRUE)
-```
-```{r}
-head(station_index, 20)
-tail(station_index, 20)
-```
-
 # 9. Metropolis-within-Gibbs sampler
 
 ```{r sampler-function}
 run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
                             b0, B0, a_sigma, b_sigma, A_tau,
-                            n_iter = 5000, burn_in = 1000,
+                            n_iter = 5000,
                             proposal_sd = 0.15,
                             seed = 123) {
 
@@ -457,7 +445,11 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
       stop(paste("m_beta contains non-finite values at iteration", t))
     }
 
-    beta_curr <- as.numeric(MASS::mvrnorm(1, mu = as.numeric(m_beta), Sigma = V_beta))
+    beta_curr <- as.numeric(MASS::mvrnorm(
+      1, 
+      mu = as.numeric(m_beta), 
+      Sigma = V_beta
+      ))
 
     # ---- 2. Gibbs updates for alpha_j ----
     xb <- as.numeric(X %*% beta_curr)
@@ -472,7 +464,11 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
     # ---- 3. Gibbs update for sigma^2 ----
     resid <- y_tilde - xb - alpha_curr[station_index]
     SSR <- sum(resid^2)
-    sigma2_curr <- rinvgamma(1, shape = a_sigma + n / 2, scale = b_sigma + SSR / 2)
+    sigma2_curr <- rinvgamma(
+      1, 
+      shape = a_sigma + n / 2, 
+      scale = b_sigma + SSR / 2
+      )
 
     if (!is.finite(sigma2_curr) || sigma2_curr <= 0) {
       stop(paste("sigma2_curr became invalid at iteration", t))
@@ -499,22 +495,36 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
     tau_store[t] <- tau_curr
   }
 
-  kept <- seq.int(from = burn_in + 1, to = n_iter)
-
   list(
     beta = beta_store,
     alpha = alpha_store,
     sigma2 = sigma2_store,
     tau = tau_store,
     accept_tau = accept_tau,
-    post_beta = beta_store[kept, , drop = FALSE],
-    post_alpha = alpha_store[kept, , drop = FALSE],
-    post_sigma2 = sigma2_store[kept],
-    post_tau = tau_store[kept],
-    accept_rate_tau = mean(accept_tau[kept]),
     accept_rate_tau_all = mean(accept_tau)
   )
 }
+```
+
+# 9b. Postprocessing
+```{r}
+post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
+  n_iter <- nrow(mcmc_fit$beta)
+  if (burn_in >= n_iter) stop("burn_in must be smaller than total iterations")
+  if (thin < 1) stop("thin must be >= 1")
+  
+  kept <- seq(from = burn_in + 1, to = n_iter, by = thin)
+
+  list(
+    post_beta = mcmc_fit$beta[kept, , drop = FALSE],
+    post_alpha = mcmc_fit$alpha[kept, , drop = FALSE],
+    post_sigma2 = mcmc_fit$sigma2[kept],
+    post_tau = mcmc_fit$tau[kept],
+    accept_rate_tau = mean(mcmc_fit$accept_tau[kept]),
+    kept_iterations = kept
+  )
+}
+
 ```
 
 # 10. Run the sampler
@@ -533,89 +543,180 @@ mcmc_fit <- run_mwg_sampler(
   a_sigma = a_sigma,
   b_sigma = b_sigma,
   A_tau = A_tau,
-  n_iter = 3000,
-  burn_in = 500,
-  proposal_sd = 0.12,
+  n_iter = 5000,
+  proposal_sd = 0.2,
   seed = 123
 )
 
-mcmc_fit$accept_rate_tau
 mcmc_fit$accept_rate_tau_all
 ```
+# 10b. Trace plots
+
+```{r trace-plots, fig.width=10, fig.height=8}
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+plot(mcmc_fit$beta[, 1], type = "l",
+     main = expression(paste("Trace plot of ", beta[1])),
+     xlab = "Iteration", ylab = "Value")
+
+plot(mcmc_fit$beta[, 2], type = "l",
+     main = expression(paste("Trace plot of ", beta[2])),
+     xlab = "Iteration", ylab = "Value")
+
+plot(mcmc_fit$sigma2, type = "l",
+     main = expression(paste("Trace plot of ", sigma^2)),
+     xlab = "Iteration", ylab = "Value")
+
+plot(mcmc_fit$tau, type = "l",
+     main = expression(paste("Trace plot of ", tau)),
+     xlab = "Iteration", ylab = "Value")
+```
+
+
+```{r trace-plots-alpha, fig.width=10, fig.height=8}
+J <- ncol(mcmc_fit$alpha)
+alpha_idx <- unique(c(1, round(J / 2), J))
+
+par(mfrow = c(length(alpha_idx), 1), mar = c(4, 4, 2, 1))
+
+for (j in alpha_idx) {
+  plot(mcmc_fit$alpha[, j], type = "l",
+       main = bquote(paste("Trace plot of ", alpha[.(j)])),
+       xlab = "Iteration", ylab = "Value")
+}
+```
+
+# 10c. ACF
+```{r acf-plots, fig.width=10, fig.height=8}
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+acf(mcmc_fit$beta[, 1],
+    main = expression(paste("ACF of ", beta[1])))
+
+acf(mcmc_fit$beta[, 2],
+    main = expression(paste("ACF of ", beta[2])))
+
+acf(mcmc_fit$sigma2,
+    main = expression(paste("ACF of ", sigma^2)))
+
+acf(mcmc_fit$tau,
+    main = expression(paste("ACF of ", tau)))
+```
+
+```{r acf-plots-alpha, fig.width=10, fig.height=8}
+par(mfrow = c(length(alpha_idx), 1), mar = c(4, 4, 2, 1))
+
+for (j in alpha_idx) {
+  acf(mcmc_fit$alpha[, j],
+      main = bquote(paste("ACF of ", alpha[.(j)])))
+}
+```
+
+# 10d. Choose burn in iterations
+```{r choose-burnin}
+burn_in <- 200
+
+post <- post_process_mcmc(mcmc_fit, burn_in = burn_in, thin = 5)
+
+post$accept_rate_tau
+```
+
+#10e. Trace plots after burn-in
+```{r post-burnin-trace, fig.width=10, fig.height=8}
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+plot(post$post_beta[, 1], type = "l",
+     main = expression(paste("Post-burn-in trace of ", beta[1])),
+     xlab = "Iteration kept", ylab = "Value")
+
+plot(post$post_beta[, 2], type = "l",
+     main = expression(paste("Post-burn-in trace of ", beta[2])),
+     xlab = "Iteration kept", ylab = "Value")
+
+plot(post$post_sigma2, type = "l",
+     main = expression(paste("Post-burn-in trace of ", sigma^2)),
+     xlab = "Iteration kept", ylab = "Value")
+
+plot(post$post_tau, type = "l",
+     main = expression(paste("Post-burn-in trace of ", tau)),
+     xlab = "Iteration kept", ylab = "Value")
+```
+### Visual inspection
+The trace plots of the post-burn-in chains show no evidence of non-stationarity or systematic trends. All parameters fluctuate around stable levels, suggesting that the burn-in period has successfully removed the initial transient phase. The chains exhibit satisfactory mixing, although some residual autocorrelation is visible for selected parameters. Overall, the visual inspection supports convergence and justifies the use of the retained samples for posterior inference.
+
+# 10f. ACF post burn-in
+```{r post-burnin-acf, fig.width=10, fig.height=8}
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+acf(post$post_beta[, 1],
+    main = expression(paste("Post-burn-in ACF of ", beta[1])))
+
+acf(post$post_beta[, 2],
+    main = expression(paste("Post-burn-in ACF of ", beta[2])))
+
+acf(post$post_sigma2,
+    main = expression(paste("Post-burn-in ACF of ", sigma^2)))
+
+acf(post$post_tau,
+    main = expression(paste("Post-burn-in ACF of ", tau)))
+```
+# 10g. ESS
+```{r}
+library(coda)
+
+mcmc_beta   <- mcmc(post$post_beta)
+mcmc_alpha  <- mcmc(post$post_alpha)
+mcmc_sigma2 <- mcmc(post$post_sigma2)
+mcmc_tau    <- mcmc(post$post_tau)
+
+effectiveSize(mcmc_beta)
+effectiveSize(mcmc_alpha)
+effectiveSize(mcmc_sigma2)
+effectiveSize(mcmc_tau)
+```
+
+
+Due to autocorrelation in the MCMC draws, the effective sample size (ESS) is used to assess the amount of independent information in the chain. The ESS values are sufficiently large, indicating good mixing of the sampler.
 
 # 11. Posterior summaries
 
 ```{r posterior-summaries}
-beta_names <- colnames(X)
+posterior_summary <- function(x) {
+  c(
+    mean = mean(x),
+    sd = sd(x),
+    q2.5 = quantile(x, 0.025),
+    median = median(x),
+    q97.5 = quantile(x, 0.975)
+  )
+}
 
-beta_summary <- data.frame(
-  parameter = beta_names,
-  mean = apply(mcmc_fit$post_beta, 2, mean),
-  sd = apply(mcmc_fit$post_beta, 2, sd),
-  q2.5 = apply(mcmc_fit$post_beta, 2, function(x) as.numeric(quantile(x, 0.025))),
-  q50 = apply(mcmc_fit$post_beta, 2, function(x) as.numeric(quantile(x, 0.50))),
-  q97.5 = apply(mcmc_fit$post_beta, 2, function(x) as.numeric(quantile(x, 0.975)))
-)
-
-sigma2_summary <- data.frame(
-  parameter = "sigma2",
-  mean = mean(mcmc_fit$post_sigma2),
-  sd = sd(mcmc_fit$post_sigma2),
-  q2.5 = as.numeric(quantile(mcmc_fit$post_sigma2, 0.025)),
-  q50 = as.numeric(quantile(mcmc_fit$post_sigma2, 0.50)),
-  q97.5 = as.numeric(quantile(mcmc_fit$post_sigma2, 0.975))
-)
-
-tau_summary <- data.frame(
-  parameter = "tau",
-  mean = mean(mcmc_fit$post_tau),
-  sd = sd(mcmc_fit$post_tau),
-  q2.5 = as.numeric(quantile(mcmc_fit$post_tau, 0.025)),
-  q50 = as.numeric(quantile(mcmc_fit$post_tau, 0.50)),
-  q97.5 = as.numeric(quantile(mcmc_fit$post_tau, 0.975))
-)
+beta_summary <- t(apply(post$post_beta, 2, posterior_summary))
+sigma2_summary <- posterior_summary(post$post_sigma2)
+tau_summary <- posterior_summary(post$post_tau)
 
 beta_summary
 sigma2_summary
 tau_summary
 ```
-
-# 12. Basic diagnostics
-
-```{r diagnostics, fig.width=10, fig.height=8}
-par(mfrow = c(3, 2))
-plot(mcmc_fit$post_beta[, 1], type = "l", main = beta_names[1], ylab = "")
-if (ncol(mcmc_fit$post_beta) >= 2) plot(mcmc_fit$post_beta[, 2], type = "l", main = beta_names[2], ylab = "")
-plot(mcmc_fit$post_sigma2, type = "l", main = expression(sigma^2), ylab = "")
-plot(mcmc_fit$post_tau, type = "l", main = expression(tau), ylab = "")
-hist(mcmc_fit$post_sigma2, breaks = 40, main = expression(posterior~sigma^2), xlab = expression(sigma^2))
-hist(mcmc_fit$post_tau, breaks = 40, main = expression(posterior~tau), xlab = expression(tau))
-```
-
-# 12a Trace plots
-```{r}
-plot(mcmc_fit$tau, type = "l", main = "Trace plot for tau", ylab = "tau", xlab = "Iteration")
-plot(mcmc_fit$sigma2, type = "l", main = "Trace plot for sigma2", ylab = "sigma2", xlab = "Iteration")
-plot(mcmc_fit$beta[,1], type = "l", main = "Trace plot for beta_0", ylab = "beta_0", xlab = "Iteration")
-plot(mcmc_fit$beta[,2], type = "l", main = "Trace plot for month coefficient", ylab = "beta", xlab = "Iteration")
-```
-# 12b Posterior densities
-```{r}
-hist(mcmc_fit$post_tau, breaks = 30, main = "Posterior of tau", xlab = "tau")
-hist(mcmc_fit$post_sigma2, breaks = 30, main = "Posterior of sigma2", xlab = "sigma2")
-```
+Inspection of the trace plots suggested only a short transient phase, so the first 200 iterations were discarded as burn-in. Residual autocorrelation remained for some parameters, especially the intercept and selected random effects; therefore, a mild thinning scheme (every 5th draw) was applied. The retained chains appeared stable, and the acceptance rate for the Metropolis-Hastings update of τ was satisfactory.
 
 
 # 13. Sensitivity analysis skeleton
 
-This section can be used to compare prior choices such as:
+This section presents a simple sensitivity analysis to compare prior choices such as:
 - \(c \in \{10, 100, 1000\}\) for \(B_0 = cI\)
 - \(A \in \{2.5, 5, 10\}\) for the half-Cauchy prior on \(\tau\)
 - \(b_\sigma \in \{0.5, 1\}\) for the inverse-gamma prior on \(\sigma^2\)
 
 ```{r sensitivity-template}
 run_one_spec <- function(c_prior, A_tau, b_sigma,
-                         n_iter = 4000, burn_in = 1000) {
+                         scenario = NA_character_,
+                         n_iter = 5000,
+                         burn_in = 200,
+                         thin = 5,
+                         seed = 123) {
+
   fit <- run_mwg_sampler(
     y_tilde = y_tilde,
     X = X,
@@ -627,38 +728,158 @@ run_one_spec <- function(c_prior, A_tau, b_sigma,
     b_sigma = b_sigma,
     A_tau = A_tau,
     n_iter = n_iter,
+    proposal_sd = 0.2,
+    seed = seed
+  )
+
+  post <- post_process_mcmc(
+    mcmc_fit = fit,
     burn_in = burn_in,
-    proposal_sd = 0.12,
-    seed = 123
+    thin = thin
   )
 
   data.frame(
+    scenario = scenario,
     c_prior = c_prior,
     A_tau = A_tau,
     b_sigma = b_sigma,
-    beta_intercept_mean = mean(fit$post_beta[, 1]),
-    sigma2_mean = mean(fit$post_sigma2),
-    tau_mean = mean(fit$post_tau),
-    tau_accept = fit$accept_rate_tau
+    beta_intercept_mean = mean(post$post_beta[, 1]),
+    sigma2_mean = mean(post$post_sigma2),
+    tau_mean = mean(post$post_tau),
+    tau_accept_post = post$accept_rate_tau
   )
 }
-
-# Example runs (uncomment when ready)
-# sensitivity_results <- bind_rows(
-#   run_one_spec(c_prior = 10,  A_tau = 2.5, b_sigma = 0.5),
-#   run_one_spec(c_prior = 100, A_tau = 5.0, b_sigma = 0.5),
-#   run_one_spec(c_prior = 1000, A_tau = 10.0, b_sigma = 1.0)
-# )
-# sensitivity_results
 ```
 
-# 14. Notes before final estimation
+# One-at-a-time sensitivity analysis
 
-Before running the final version of the model, check:
+```{r sensitivity-runs}
+baseline_row <- data.frame(
+  scenario = "Baseline",
+  c_prior = 100,
+  A_tau = 5,
+  b_sigma = 0.5,
+  beta_intercept_mean = mean(post$post_beta[, 1]),
+  sigma2_mean = mean(post$post_sigma2),
+  tau_mean = mean(post$post_tau),
+  tau_accept_post = post$accept_rate_tau
+)
 
-1. the acceptance rate for the MH step on \(\tau\) is reasonable;
-2. trace plots show stable mixing after burn-in;
-3. posterior summaries are stable across different prior specifications;
-4. the proposal standard deviation for \(\tau\) is tuned if necessary.
+sensitivity_results <- bind_rows(
+  baseline_row,
+  run_one_spec(10,  5, 0.5, scenario = "B0 smaller"),
+  run_one_spec(1000, 5, 0.5, scenario = "B0 larger"),
+  run_one_spec(100, 2.5, 0.5, scenario = "A_tau smaller"),
+  run_one_spec(100, 10, 0.5, scenario = "A_tau larger"),
+  run_one_spec(100, 5, 1, scenario = "b_sigma larger")
+)
 
-A practical target for the MH acceptance rate is often around 20% to 50%, though there is no single universal threshold.
+sensitivity_results
+```
+
+The sensitivity analysis shows that posterior estimates are remarkably stable across a wide range of prior specifications. In particular, the posterior mean of the intercept, the residual variance σ^2, and the hyperparameter τ remain virtually unchanged when varying the prior scale c, the hyperparameter A, and the inverse-gamma parameter b_σ. As expected, the hyperparameter τ shows slightly higher sensitivity compared to the regression coefficients, although the magnitude of variation remains negligible.
+This suggests that the data are highly informative and that the posterior distribution is largely driven by the likelihood rather than the prior. The results are therefore robust to reasonable prior choices.
+
+# 14. CODA: GEWEKE
+```{r geweke-diagnostic, message=FALSE, warning=FALSE}
+library(coda)
+
+mcmc_beta1  <- mcmc(post$post_beta[, 1])
+mcmc_beta2  <- mcmc(post$post_beta[, 2])
+mcmc_sigma2 <- mcmc(post$post_sigma2)
+mcmc_tau    <- mcmc(post$post_tau)
+
+geweke_results <- data.frame(
+  parameter = c("beta_1", "beta_2", "sigma2", "tau"),
+  z_score = c(
+    geweke.diag(mcmc_beta1)$z,
+    geweke.diag(mcmc_beta2)$z,
+    geweke.diag(mcmc_sigma2)$z,
+    geweke.diag(mcmc_tau)$z
+  )
+)
+
+geweke_results
+```
+```{r geweke-alpha}
+J <- ncol(post$post_alpha)
+alpha_idx <- unique(c(1, round(J / 2), J))
+
+alpha_geweke <- data.frame(
+  parameter = paste0("alpha_", alpha_idx),
+  z_score = sapply(alpha_idx, function(j) geweke.diag(mcmc(post$post_alpha[, j]))$z)
+)
+
+alpha_geweke
+```
+The Geweke diagnostic provides no evidence against convergence. All z-scores are well below the conventional threshold of 1.96 in absolute value, both for the main model parameters and for the selected random effects. This finding is consistent with the visual inspection of the trace plots and supports the use of the retained draws for posterior inference.
+
+
+# 15. PPC
+```{r}
+# Number of posterior draws to use for PPC
+S <- min(100, nrow(post$post_beta))
+
+set.seed(123)
+
+# Randomly select posterior draws
+draw_ids <- sample(seq_len(nrow(post$post_beta)), S)
+
+# Matrix to store replicated datasets
+yrep_mat <- matrix(NA_real_, nrow = length(y_tilde), ncol = S)
+
+for (s in seq_along(draw_ids)) {
+  d <- draw_ids[s]
+
+  beta_s   <- post$post_beta[d, ]
+  alpha_s  <- post$post_alpha[d, ]
+  sigma2_s <- post$post_sigma2[d]
+
+  mu_s <- as.vector(X %*% beta_s) + alpha_s[station_index]
+
+  yrep_mat[, s] <- rnorm(
+    n = length(y_tilde),
+    mean = mu_s,
+    sd = sqrt(sigma2_s)
+  )
+}
+```
+
+```{r}
+obs_mean <- mean(y_tilde)
+obs_sd   <- sd(y_tilde)
+
+rep_means <- apply(yrep_mat, 2, mean)
+rep_sds   <- apply(yrep_mat, 2, sd)
+
+par(mfrow = c(1, 2))
+
+hist(rep_means, main = "PPC: mean", xlab = "Replicated means")
+abline(v = obs_mean, lwd = 2, lty = 2)
+
+hist(rep_sds, main = "PPC: sd", xlab = "Replicated sds")
+abline(v = obs_sd, lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+```
+
+## Visualization
+```{r}
+plot(density(y_tilde),
+     lwd = 2,
+     main = "Posterior Predictive Check",
+     xlab = "log(PM2.5)",
+     ylim = c(0, max(density(y_tilde)$y) * 1.2))
+
+for (s in 1:S) {
+  lines(density(yrep_mat[, s]), col = rgb(1, 0, 0, 0.08))
+}
+
+lines(density(y_tilde), lwd = 2)
+legend("topright",
+       legend = c("Observed data", "Replicated data"),
+       lwd = c(2, 1),
+       col = c("black", rgb(1, 0, 0, 0.4)),
+       bty = "n")
+```
+
