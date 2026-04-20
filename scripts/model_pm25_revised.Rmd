@@ -947,4 +947,8 @@ legend("topright",
        col = c("black", rgb(1, 0, 0, 0.4)),
        bty = "n")
 ```
+The posterior predictive checks indicate a satisfactory model fit. 
+The distribution of replicated means and standard deviations closely matches the observed values, suggesting that the model accurately captures the first two moments of the data. 
 
+Furthermore, the posterior predictive density aligns well with the empirical distribution of $\log(\text{PM2.5})$, with only minor discrepancies in the peak and tail regions. 
+Overall, these results suggest that the model provides an adequate representation of the data-generating process, with no major signs of systematic misfit.
