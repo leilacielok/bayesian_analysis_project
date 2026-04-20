@@ -2,6 +2,7 @@
 E2a/
 *.parquet
 metadata.xlsx
+pm25_bayes.csv
 
 # R proj
 bayesian_analysis.Rproj
