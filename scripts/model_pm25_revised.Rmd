@@ -42,7 +42,7 @@ A Metropolis-within-Gibbs sampler is used:
 - a Metropolis-Hastings step for $\tau$
 
 
-# 1. Libraries and data import
+# Libraries and data import
 
 ```{r libraries}
 library(dplyr)
@@ -70,7 +70,7 @@ df <- df %>%
   )
 summary(df)
 ```
-# 2 EDA
+# EDA
 ## Outcome variable
 ```{r eda-outcome, message=FALSE, warning=FALSE}
 # Basic summary statistics
@@ -233,7 +233,7 @@ Exploratory analysis shows that the raw PM2.5 outcome is highly right-skewed, wi
 
 The panel structure is markedly unbalanced across monitoring stations. The number of observations per station ranges from 69 to 332, with a median of 299.5. The dataset is also uneven across months: while most months contain between roughly 2,600 and 3,100 observations, January is severely underrepresented, with only 177 observations. Moreover, 32 stations exhibit at least one completely missing month, and the minimum temporal coverage is only 4 months for some stations. These features support the use of a hierarchical specification, which is well suited to unbalanced grouped data.
 
-# 3. Data preprocessing
+# Data preprocessing
 
 ```{r preprocessing}
 # Create log outcome and keep only finite values
@@ -267,7 +267,7 @@ df_model %>%
   )
 ```
 
-# 4. Design matrices and indexing
+# Design matrices and indexing
 
 ```{r design-matrices}
 # Fixed-effects matrix
@@ -299,7 +299,7 @@ table(df_model$month)
 table(df_model$day_of_week)
 summary(df_model$station_id)
 ```
-# 6. Prior specifications
+# Prior specifications
 
 Weakly informative priors are adopted for all model parameters, reflecting limited prior knowledge while ensuring posterior regularization.
 
@@ -384,7 +384,7 @@ tau_store <- numeric(n_iter)
 accept_tau <- logical(n_iter)
 ```
 
-# 7. Full conditional conditional posterior distributions specification
+# Full conditional conditional posterior distributions specification
 
 The full conditional posterior distributions are derived and passed to the Gibbs sampling algorithm:
 
@@ -437,25 +437,8 @@ $$
 
 This distribution does not belong to a standard family, hence we use a Metropolis–Hastings step within the Gibbs sampler.
 
-# 8. Utility functions for the sampler
 
-```{r utility-functions}
-# Draw from Inverse-Gamma(shape, scale) under the convention:
-# p(x) prop to x^{-(a+1)} exp(-b/x)
-# If G ~ Gamma(shape=a, rate=b), then 1/G ~ IG(a,b)
-rinvgamma <- function(n, shape, scale) {
-  1 / rgamma(n, shape = shape, rate = scale)
-}
-
-# Log-target for eta = log(tau)
-log_target_eta <- function(eta, alpha, A_tau) {
-  J <- length(alpha)
-  S_alpha <- sum(alpha^2)
-  -(J - 1) * eta - S_alpha / (2 * exp(2 * eta)) - log(1 + exp(2 * eta) / A_tau^2)
-}
-```
-
-# 9. Metropolis-within-Gibbs sampler
+# Metropolis-within-Gibbs sampler
 
 ```{r sampler-function}
 run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
@@ -570,6 +553,24 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
 }
 ```
 
+## Utility functions for the sampler
+
+```{r utility-functions}
+# Draw from Inverse-Gamma(shape, scale) under the convention:
+# p(x) prop to x^{-(a+1)} exp(-b/x)
+# If G ~ Gamma(shape=a, rate=b), then 1/G ~ IG(a,b)
+rinvgamma <- function(n, shape, scale) {
+  1 / rgamma(n, shape = shape, rate = scale)
+}
+
+# Log-target for eta = log(tau)
+log_target_eta <- function(eta, alpha, A_tau) {
+  J <- length(alpha)
+  S_alpha <- sum(alpha^2)
+  -(J - 1) * eta - S_alpha / (2 * exp(2 * eta)) - log(1 + exp(2 * eta) / A_tau^2)
+}
+```
+
 ## Postprocessing formula
 ```{r}
 post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
@@ -591,7 +592,7 @@ post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
 
 ```
 
-# 10. Run the sampler
+# Run the sampler
 
 ```{r run-sampler, cache = TRUE}
 # MASS::mvrnorm is used inside the function
@@ -741,7 +742,7 @@ effectiveSize(mcmc_tau)
 
 Due to autocorrelation in the MCMC draws, the effective sample size (ESS) is used to assess the amount of independent information in the chain. The ESS values are sufficiently large, indicating good mixing of the sampler.
 
-# 11. Posterior summaries
+# Posterior summaries
 
 ```{r posterior-summaries}
 posterior_summary <- function(x) {
@@ -765,7 +766,7 @@ tau_summary
 Inspection of the trace plots suggested only a short transient phase, so the first 200 iterations were discarded as burn-in. Residual autocorrelation remained for some parameters, especially the intercept and selected random effects; therefore, a mild thinning scheme (every 5th draw) was applied. The retained chains appeared stable, and the acceptance rate for the Metropolis-Hastings update of $\tau$ was satisfactory.
 
 
-# 13. Sensitivity analysis
+# Sensitivity analysis
 
 This section presents a simple sensitivity analysis to assess the robustness of posterior inference to prior choices. In particular, I consider:
 
@@ -844,7 +845,7 @@ sensitivity_results
 The sensitivity analysis shows that posterior estimates are remarkably stable across a wide range of prior specifications. In particular, the posterior mean of the intercept, the residual variance $\sigma^2$, and the hyperparameter $\tau$ remain virtually unchanged when varying the prior scale c, the hyperparameter A, and the inverse-gamma parameter $b_\sigma$. As expected, the hyperparameter $\tau$ shows slightly higher sensitivity compared to the regression coefficients, although the magnitude of variation remains negligible.
 This suggests that the data are highly informative and that the posterior distribution is largely driven by the likelihood rather than the prior. The results are therefore robust to reasonable prior choices.
 
-# 14. CODA: Geweke Diagnostics
+# CODA: Geweke Diagnostics
 ```{r geweke-diagnostic, message=FALSE, warning=FALSE}
 library(coda)
 
@@ -879,7 +880,7 @@ alpha_geweke
 The Geweke diagnostic provides no evidence against convergence. All z-scores are well below the conventional threshold of 1.96 in absolute value, both for the main model parameters and for the selected random effects. This finding is consistent with the visual inspection of the trace plots and supports the use of the retained draws for posterior inference.
 
 
-# 15. Posterior Predictive Checks
+# Posterior Predictive Checks
 ```{r}
 # Number of posterior draws to use for PPC
 S <- min(100, nrow(post$post_beta))
