@@ -3,13 +3,13 @@ title: "Bayesian Hierarchical Model for PM2.5"
 author: "Leila Cielok"
 date: "29-04-2026"
 output:
-  html_document:
-    toc: true
-    toc_float: true
-    number_sections: true
   pdf_document:
     latex_engine: xelatex
     toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    toc_float: true
     number_sections: true
 ---
 
