@@ -1,0 +1,151 @@
+---
+title: "Bayesian Hierarchical Model for PM2.5 in Italy"
+author: "Leila Cielok"
+date: "29-04-2026"
+output:
+  pdf_document:
+    latex_engine: xelatex
+fontsize: 11pt
+geometry: margin=1in
+---
+
+# Introduction
+
+Air pollution represents a major environmental and public health concern. In particular, fine particulate matter (PM2.5) is among the most harmful pollutants due to its ability to penetrate deep into the respiratory system and its strong association with cardiovascular and respiratory diseases.
+
+A key challenge in modeling PM2.5 concentrations lies in the presence of substantial heterogeneity across monitoring stations and irregular temporal coverage. Stations differ in terms of geographical characteristics, local emission sources, and environmental conditions, while observational data often exhibit an unbalanced panel structure, with varying numbers of observations across stations and missing time periods.
+
+In this context, Bayesian hierarchical models provide a natural and flexible framework. By introducing group-level random effects, these models allow for partial pooling, enabling information sharing across stations while preserving local heterogeneity. Moreover, the Bayesian approach provides a coherent framework for uncertainty quantification and prior specification.
+
+This paper develops a Bayesian hierarchical model for daily PM2.5 concentrations observed across monitoring stations in Italy. Posterior inference is carried out using a Metropolis-within-Gibbs sampler. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
+
+# Data
+
+The dataset consists of daily PM2.5 measurements collected across monitoring stations in Italy during 2025. After preprocessing, the final dataset contains 31,349 observations across 116 stations.
+
+The empirical distribution of the raw outcome variable is highly right-skewed, with a skewness of approximately 17. This strong asymmetry is driven by extreme values in the upper tail. To address this issue, a logarithmic transformation is applied:
+
+$$
+\tilde{y}_i = \log(y_i),
+$$
+
+which substantially reduces skewness (approximately -0.29) and yields a more symmetric distribution, supporting the use of a Gaussian likelihood.
+
+The panel structure is markedly unbalanced. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Additionally, temporal coverage varies across stations: some are observed for the entire year, while others are only observed for a limited number of months. In particular, 32 stations exhibit at least one completely missing month, and the minimum coverage is only 4 months.
+
+These features motivate the use of a hierarchical specification, which is well suited to handle unbalanced grouped data.
+
+# Model
+
+We consider a hierarchical model for the log-transformed PM2.5 concentrations. Let \( \tilde{y}_i \) denote the transformed outcome for observation \( i \). The likelihood is specified as:
+
+$$
+\tilde{y}_i \mid \beta, \alpha, \sigma^2 \sim \mathcal{N}(x_i^\top \beta + \alpha_{j[i]}, \sigma^2),
+$$
+
+where:
+- \( x_i \) is a vector of covariates including month and day-of-week effects,
+- \( \beta \) is a vector of regression coefficients,
+- \( \alpha_{j[i]} \) is a station-specific random intercept.
+
+## Hierarchical structure
+
+The random effects are modeled as:
+
+$$
+\alpha_j \mid \tau \sim \mathcal{N}(0, \tau^2), \quad j = 1, \dots, J,
+$$
+
+which induces partial pooling across stations.
+
+## Prior specification
+
+Weakly informative priors are assigned to all parameters.
+
+For the regression coefficients:
+
+$$
+\beta \sim \mathcal{N}(b_0, B_0),
+$$
+
+where \( B_0 = cI \) is a diagonal covariance matrix.
+
+For the observation variance:
+
+$$
+\sigma^2 \sim \text{Inverse-Gamma}(a_\sigma, b_\sigma).
+$$
+
+For the group-level standard deviation:
+
+$$
+\tau \sim \text{Half-Cauchy}(0, A).
+$$
+
+The use of a half-Cauchy prior for \( \tau \) avoids the well-known sensitivity of inverse-gamma priors for variance components, while providing weakly informative regularization.
+
+## Posterior inference
+
+Posterior inference is performed using a Metropolis-within-Gibbs sampler. The full conditional distributions for \( \beta \), \( \alpha_j \), and \( \sigma^2 \) belong to standard families and are sampled via Gibbs steps.
+
+In contrast, the full conditional distribution of \( \tau \) is not available in closed form due to the half-Cauchy prior. Therefore, a Metropolis-Hastings step is used, implemented on the logarithmic scale with a normal random-walk proposal.
+
+The sampling scheme can be summarized as follows:
+
+- Sample \( \beta \) from its conditional posterior
+- Sample each \( \alpha_j \) from its conditional posterior
+- Sample \( \sigma^2 \) from its conditional posterior
+- Update \( \tau \) via a Metropolis-Hastings step
+
+# MCMC Implementation
+
+The sampler is run for 5,000 iterations. Visual inspection of the trace plots suggests a short initial transient phase, and the first 200 iterations are discarded as burn-in. To reduce autocorrelation, a thinning scheme is applied by retaining every 5th draw.
+
+## Tuning of the Metropolis step
+
+The proposal distribution for \( \tau \) is a normal random walk on the log scale. A tuning exercise was conducted to assess the impact of the proposal standard deviation.
+
+With a proposal standard deviation of 0.15, the acceptance rate was approximately 0.48. Increasing the proposal scale to 0.20 reduced the acceptance rate to approximately 0.38. Despite this change, trace plots and autocorrelation functions remained essentially unchanged, and posterior summaries were virtually identical.
+
+Given these results, the value \( \text{proposal\_sd} = 0.20 \) is retained in the final implementation.
+
+# Results
+
+## Convergence diagnostics
+
+Trace plots of the post-burn-in chains show no evidence of non-stationarity or systematic trends. The chains fluctuate around stable levels, indicating that convergence has been achieved.
+
+The Geweke diagnostic confirms this result. All z-scores are well within the conventional acceptance range, providing no evidence against convergence.
+
+The effective sample size (ESS) is generally high across parameters. In particular, the variance parameter exhibits an ESS close to the total number of retained draws, while the hyperparameter \( \tau \) also shows a high ESS. The random effects display more variability, as expected, but remain within acceptable ranges.
+
+## Posterior summaries
+
+The posterior mean of the intercept is approximately 2.60 (on the log scale). The residual variance is estimated around 0.32, while the group-level standard deviation is approximately 0.30.
+
+These results indicate a moderate degree of heterogeneity across stations, with the hierarchical structure providing meaningful shrinkage through partial pooling.
+
+## Sensitivity analysis
+
+A sensitivity analysis was conducted by varying key prior hyperparameters, including:
+- the prior variance of \( \beta \),
+- the scale parameter of the half-Cauchy prior on \( \tau \),
+- the parameters of the inverse-gamma prior on \( \sigma^2 \).
+
+The results show that posterior estimates are remarkably stable across all specifications. In particular, the posterior means of the intercept, \( \sigma^2 \), and \( \tau \) remain virtually unchanged. This suggests that the data are highly informative and that the posterior distribution is largely driven by the likelihood.
+
+## Posterior predictive checks
+
+Posterior predictive checks were performed to assess model adequacy. Replicated datasets were generated from the posterior distribution and compared to the observed data.
+
+The distribution of replicated means and standard deviations closely matches the observed values, indicating that the model accurately captures the first two moments of the data.
+
+Furthermore, the posterior predictive density aligns well with the empirical distribution of log-transformed PM2.5, with only minor discrepancies in the peak and tail regions. These differences are consistent with the Gaussian assumption and do not indicate major model misspecification.
+
+# Conclusion
+
+This paper develops a Bayesian hierarchical model for daily PM2.5 concentrations, accounting for heterogeneity across monitoring stations and unbalanced panel structure.
+
+The Metropolis-within-Gibbs sampler exhibits good convergence properties, supported by multiple diagnostic tools. Posterior inference is robust to prior specification, and posterior predictive checks indicate a satisfactory model fit.
+
+Overall, the hierarchical Bayesian framework provides a flexible and effective approach for modeling air pollution data. Possible extensions include the incorporation of spatial dependence across stations, the use of more flexible likelihood specifications, and the inclusion of additional covariates capturing environmental and meteorological factors.

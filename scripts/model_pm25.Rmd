@@ -13,6 +13,24 @@ output:
     number_sections: true
 ---
 
+```{r setup-save-figures, include=FALSE}
+# Create directory if it doesn't exist
+fig_dir <- "../paper/figures"
+if (!dir.exists(fig_dir)) {
+  dir.create(fig_dir, recursive = TRUE)
+}
+
+# Helper function to save base R plots
+save_base_plot <- function(filename, width = 6, height = 4) {
+  filepath <- file.path(fig_dir, filename)
+  pdf(filepath, width = width, height = height)
+  return(filepath)
+}
+
+# Helper function to close device
+close_plot <- function() dev.off()
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 set.seed(123)
@@ -83,13 +101,20 @@ cat("Number of missing values:", sum(is.na(df[[outcome_var]])), "\n")
 cat("Number of non-positive values:", sum(df[[outcome_var]] <= 0, na.rm = TRUE), "\n")
 
 # Histogram of raw outcome
-ggplot(df, aes(x = .data[[outcome_var]])) +
+p1 <- ggplot(df, aes(x = .data[[outcome_var]])) +
   geom_histogram(bins = 40) +
   labs(
     title = "Distribution of the raw PM2.5 outcome",
     x = outcome_var,
     y = "Frequency"
   )
+
+ggsave(
+  filename = file.path(fig_dir, "hist_raw_pm25.pdf"),
+  plot = p1,
+  width = 6,
+  height = 4
+)
 
 # Skeweness of raw data
 skew_raw <- skewness(df[[outcome_var]], na.rm = TRUE)
@@ -98,13 +123,20 @@ cat("Skewness (raw):", skew_raw, "\n")
 # Histogram of log-transformed outcome
 df_pos <- df %>% filter(.data[[outcome_var]] > 0)
 
-ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
+p2 <- ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
   geom_histogram(bins = 40) +
   labs(
     title = "Distribution of the log-transformed PM2.5 outcome",
     x = paste0("log(", outcome_var, ")"),
     y = "Frequency"
   )
+
+ggsave(
+  filename = file.path(fig_dir, "hist_log_pm25.pdf"),
+  plot = p2,
+  width = 6,
+  height = 4
+)
 
 # Skeweness of log data
 skew_log <- skewness(log(df[[outcome_var]]), na.rm = TRUE)
@@ -218,7 +250,8 @@ missing_month_detail <- station_month_full %>%
 head(missing_month_detail, 20)
 
 # Heatmap of data availability by station and month
-ggplot(station_month_full, aes(x = factor(month), y = factor(station_id), fill = n_obs)) +
+p_heat <- ggplot(station_month_full, 
+                 aes(x = factor(month), y = factor(station_id), fill = n_obs)) +
   geom_tile() +
   labs(
     title = "Data availability by station and month",
@@ -228,6 +261,14 @@ ggplot(station_month_full, aes(x = factor(month), y = factor(station_id), fill =
   ) +
   theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank())
+
+ggsave(
+  filename = file.path(fig_dir, "data_availability_heatmap.pdf"),
+  plot = p_heat,
+  width = 7,
+  height = 6
+)
+
 ```
 Exploratory analysis shows that the raw PM2.5 outcome is highly right-skewed, with a skewness of 17.06 and a long upper tail driven by extreme observations. After log transformation, skewness drops to -0.29, yielding a much more symmetric distribution and supporting the use of a Gaussian likelihood for the transformed outcome.
 
@@ -572,6 +613,7 @@ log_target_eta <- function(eta, alpha, A_tau) {
 ```
 
 ## Postprocessing formula
+
 ```{r}
 post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
   n_iter <- nrow(mcmc_fit$beta)
@@ -615,6 +657,7 @@ mcmc_fit <- run_mwg_sampler(
 
 mcmc_fit$accept_rate_tau_all
 ```
+
 ## Visualization: Trace plots
 
 ```{r trace-plots, fig.width=10, fig.height=8}
@@ -688,42 +731,42 @@ post$accept_rate_tau
 
 ## Trace plots post burn-in
 ```{r post-burnin-trace, fig.width=10, fig.height=8}
+save_base_plot("trace_postburn.pdf", 7, 6)
+
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 
 plot(post$post_beta[, 1], type = "l",
-     main = expression(paste("Post-burn-in trace of ", beta[1])),
-     xlab = "Iteration kept", ylab = "Value")
-
+     main = expression(paste("Trace of ", beta[1])))
 plot(post$post_beta[, 2], type = "l",
-     main = expression(paste("Post-burn-in trace of ", beta[2])),
-     xlab = "Iteration kept", ylab = "Value")
-
+     main = expression(paste("Trace of ", beta[2])))
 plot(post$post_sigma2, type = "l",
-     main = expression(paste("Post-burn-in trace of ", sigma^2)),
-     xlab = "Iteration kept", ylab = "Value")
-
+     main = expression(paste("Trace of ", sigma^2)))
 plot(post$post_tau, type = "l",
-     main = expression(paste("Post-burn-in trace of ", tau)),
-     xlab = "Iteration kept", ylab = "Value")
+     main = expression(paste("Trace of ", tau)))
+
+par(mfrow = c(1, 1))
+
+close_plot()
 ```
+
 ### Visual inspection
 The trace plots of the post-burn-in chains show no evidence of non-stationarity or systematic trends. All parameters fluctuate around stable levels, suggesting that the burn-in period has successfully removed the initial transient phase. The chains exhibit satisfactory mixing, although some residual autocorrelation is visible for selected parameters. Overall, the visual inspection supports convergence and justifies the use of the retained samples for posterior inference.
 
 ## ACF post burn-in
+
 ```{r post-burnin-acf, fig.width=10, fig.height=8}
+save_base_plot("acf_postburn.pdf", 7, 6)
+
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 
-acf(post$post_beta[, 1],
-    main = expression(paste("Post-burn-in ACF of ", beta[1])))
+acf(post$post_beta[, 1])
+acf(post$post_beta[, 2])
+acf(post$post_sigma2)
+acf(post$post_tau)
 
-acf(post$post_beta[, 2],
-    main = expression(paste("Post-burn-in ACF of ", beta[2])))
+par(mfrow = c(1, 1))
 
-acf(post$post_sigma2,
-    main = expression(paste("Post-burn-in ACF of ", sigma^2)))
-
-acf(post$post_tau,
-    main = expression(paste("Post-burn-in ACF of ", tau)))
+close_plot()
 ```
 ## ESS
 
@@ -847,6 +890,7 @@ The sensitivity analysis shows that posterior estimates are remarkably stable ac
 This suggests that the data are highly informative and that the posterior distribution is largely driven by the likelihood rather than the prior. The results are therefore robust to reasonable prior choices.
 
 # CODA: Geweke Diagnostics
+
 ```{r geweke-diagnostic, message=FALSE, warning=FALSE}
 library(coda)
 
@@ -882,7 +926,8 @@ The Geweke diagnostic provides no evidence against convergence. All z-scores are
 
 
 # Posterior Predictive Checks
-```{r}
+
+```{r PPC}
 # Number of posterior draws to use for PPC
 S <- min(100, nrow(post$post_beta))
 
@@ -911,41 +956,49 @@ for (s in seq_along(draw_ids)) {
 }
 ```
 
-```{r}
+```{r PPC-mean_sd}
 obs_mean <- mean(y_tilde)
 obs_sd   <- sd(y_tilde)
 
 rep_means <- apply(yrep_mat, 2, mean)
 rep_sds   <- apply(yrep_mat, 2, sd)
 
+save_base_plot("ppc_moments.pdf", 7, 4)
+
 par(mfrow = c(1, 2))
 
-hist(rep_means, main = "PPC: mean", xlab = "Replicated means")
+hist(rep_means, main = "PPC: mean")
 abline(v = obs_mean, lwd = 2, lty = 2)
 
-hist(rep_sds, main = "PPC: sd", xlab = "Replicated sds")
+hist(rep_sds, main = "PPC: sd")
 abline(v = obs_sd, lwd = 2, lty = 2)
 
 par(mfrow = c(1, 1))
+
+close_plot()
 ```
 
-```{r}
+```{r PPC-plot}
+save_base_plot("ppc_density.pdf", 7, 5)
+
 plot(density(y_tilde),
      lwd = 2,
      main = "Posterior Predictive Check",
-     xlab = "log(PM2.5)",
-     ylim = c(0, max(density(y_tilde)$y) * 1.2))
+     xlab = "log(PM2.5)")
 
 for (s in 1:S) {
   lines(density(yrep_mat[, s]), col = rgb(1, 0, 0, 0.08))
 }
 
 lines(density(y_tilde), lwd = 2)
+
 legend("topright",
-       legend = c("Observed data", "Replicated data"),
-       lwd = c(2, 1),
-       col = c("black", rgb(1, 0, 0, 0.4)),
+       legend = c("Observed", "Replicated"),
+       col = c("black", rgb(1,0,0,0.4)),
+       lwd = c(2,1),
        bty = "n")
+
+close_plot()
 ```
 The posterior predictive checks indicate a satisfactory model fit. 
 The distribution of replicated means and standard deviations closely matches the observed values, suggesting that the model accurately captures the first two moments of the data. 
