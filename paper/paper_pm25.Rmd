@@ -5,10 +5,11 @@ date: "29-04-2026"
 output:
   bookdown::pdf_document2:
     latex_engine: xelatex
-  html_document:
-    df_print: paged
+  bookdown::html_document2: default
 fontsize: 11pt
 geometry: margin=1in
+header-includes:
+  - \usepackage{placeins}
 ---
 
 # Introduction
@@ -136,37 +137,75 @@ Residual autocorrelation is illustrated in Figure \@ref(fig:fig-acf), motivating
 knitr::include_graphics("figures/acf_postburn.pdf")
 ```
 
+\FloatBarrier
+
 The Geweke diagnostic confirms this result. All z-scores are well within the conventional acceptance range, providing no evidence against convergence.
 
 The effective sample size (ESS) is generally high across parameters. In particular, the variance parameter exhibits an ESS close to the total number of retained draws, while the hyperparameter \( \tau \) also shows a high ESS. The random effects display more variability, as expected, but remain within acceptable ranges.
 
 ## Posterior summaries
 
-Table \@ref(tab:tab-posterior) reports the posterior means of the key model parameters.
+The posterior estimates shown in Table \@ref(tab:posterior-effects) provide a clear and economically meaningful interpretation of the main drivers of PM2.5 concentrations.
 
-The posterior mean of the intercept is approximately 2.60 (on the log scale), corresponding to an average PM2.5 level of about $\exp(2.60) \approx 13.5$.
+The intercept represents the expected value of the log-transformed outcome for the reference category, corresponding to January 2025 and Monday, for a station with average random effect. Its posterior mean is approximately 2.60, which translates into a baseline PM2.5 level of about `r round(exp(2.603),1)` on the original scale. This value can be interpreted as a typical baseline level of air pollution under winter conditions.
 
-The residual variance $\sigma^2$ is estimated around 0.32, implying a standard deviation of approximately 0.56. This reflects the within-station variability in daily PM2.5 concentrations.
+**Seasonal effects.**  
+A strong and systematic seasonal pattern emerges from the estimated monthly coefficients. January serves as the reference month, and nearly all other months exhibit negative coefficients relative to it. This indicates that PM2.5 concentrations tend to be significantly lower throughout most of the year compared to January.
 
-The group-level standard deviation $\tau$ is approximately 0.30, capturing the variability across monitoring stations.
+The magnitude of these effects is substantial. In particular, spring, summer, and early autumn months are associated with large reductions in PM2.5 levels, often exceeding 30–50% relative to January. December, on the other hand, appears statistically close to January, suggesting a return to high pollution levels during the winter season.
 
-Comparing $\sigma^2$ and $\tau$ suggests that within-station variability is larger than between-station variability, indicating that short-term fluctuations dominate over persistent spatial differences, although the latter remain non-negligible.
+This pattern is consistent with well-known environmental mechanisms. During colder months, increased emissions from residential heating, combined with more stable atmospheric conditions and reduced dispersion, lead to the accumulation of particulate matter. In contrast, warmer months are characterized by improved atmospheric mixing and lower heating-related emissions.
 
-```{r tab-posterior, echo=FALSE, warning = FALSE}
+**Day-of-week effects.**  
+The estimated coefficients for the day of the week are small in magnitude and their credible intervals include zero. This suggests that, once seasonal effects and station-level heterogeneity are accounted for, there is no strong systematic weekly cycle in PM2.5 concentrations.
+
+**Variance decomposition and spatial heterogeneity.**  
+The posterior estimate of the residual standard deviation is larger than the group-level standard deviation, indicating that day-to-day fluctuations within a station are more pronounced than persistent differences across stations. However, the between-station variability remains non-negligible, highlighting structural geographical heterogeneity.
+
+**Economic and geographical implications.**  
+The results suggest that pollution exposure is strongly seasonal, with higher risk concentrated in winter months. This supports the use of seasonally targeted environmental policies, particularly focusing on emissions from heating and transport.
+
+At the same time, the absence of strong weekday effects indicates that policies based solely on weekly cycles may have limited impact unless combined with broader structural interventions.
+
+Finally, the presence of persistent differences across stations highlights the importance of geographically differentiated policies.
+
+```{r tab-coefficients, echo=FALSE, warning=FALSE, message=FALSE}
 library(knitr)
 
-summary_table <- data.frame(
-  Parameter = c("Intercept ($\\beta_0$)", 
-                "Residual variance ($\\sigma^2$)", 
-                "Group-level sd ($\\tau$)"),
-  Mean = c("2.60", "0.32", "0.30")
+tab <- data.frame(
+  Variable = c("Intercept (Jan, Mon)", "February", "March", "April", "May",
+               "June", "July", "August", "September", "October", "November", "December"),
+  Mean = c(2.603, -0.016, -0.362, -0.615, -0.742,
+           -0.119, -0.598, -0.425, -0.799, -0.605, -0.381, 0.068),
+  Effect = c("Baseline (~13.5)", "-1.6%", "-30.4%", "-45.9%", "-52.4%",
+             "-11.3%", "-45.0%", "-34.6%", "-55.0%", "-45.4%", "-31.7%", "+7.0%")
 )
 
-kable(summary_table,
-      caption = "Posterior summary of key model parameters.",
-      escape = FALSE)
+knitr::kable(
+  tab,
+  caption = "(\\#tab:posterior-effects) Posterior means and approximate percentage effects relative to the baseline (January, Monday)."
+)
 ```
 
+\FloatBarrier
+
+### Spatial Analysis
+
+Figure \@ref(fig:fig-station-map) displays the geographical distribution of monitoring stations, with colors representing the posterior mean of the station-specific random effects.
+
+The spatial comparison is based on a simple latitude-based grouping and should be interpreted as an exploratory geographical characterization rather than a formal spatial model. Each point in the map represents a station, with color indicating the posterior mean of the station-specific random effect. Positive values correspond to locations with structurally higher PM2.5 levels after controlling for temporal effects, while negative values indicate lower baseline pollution levels.
+
+```{r fig-station-map, echo=FALSE, fig.cap="Map of monitoring stations in Italy.", out.width='85%'}
+knitr::include_graphics("figures/station_random_effects_map.pdf")
+```
+
+\FloatBarrier
+
+A coarse geographical comparison based on station latitude reveals a clear North–South gradient in the posterior station effects. Stations located in the northern part of Italy display, on average, positive random effects, whereas southern stations tend to exhibit negative values, with central stations lying in between. 
+
+A posterior comparison between the average station effects in the North and in the South shows a mean difference of about 0.31 on the log scale, with the corresponding 95\% credible interval entirely above zero. The posterior probability that the North has a higher average station effect than the South is effectively equal to one. On the original scale, this difference corresponds to roughly a 36\% higher structural PM2.5 level in the North relative to the South, after controlling for month and day-of-week effects.
+
+This finding is consistent with the idea that northern Italy is more exposed to persistent pollution accumulation mechanisms, likely due to a combination of higher urban and industrial intensity, traffic exposure, and less favorable dispersion conditions. At the same time, the spatial distribution of the station effects also shows substantial local heterogeneity, suggesting that broad geographical gradients coexist with important location-specific determinants of air quality.
 
 ## Sensitivity analysis
 
@@ -193,19 +232,7 @@ The distribution of replicated means and standard deviations is consistent with 
 
 Furthermore, the posterior predictive density aligns well with the empirical distribution of log-transformed PM2.5, with only minor discrepancies in the peak and tail regions. These differences are consistent with the Gaussian assumption and do not indicate major model misspecification.
 
-### Interpretation of results
 
-The posterior estimates provide a clear interpretation of the main sources of variability in PM2.5 concentrations.
-
-The posterior mean of the intercept is approximately 2.60 on the log scale. This corresponds to an average PM2.5 level of about $\exp(2.60) \approx 13.5$, which can be interpreted as a baseline pollution level after accounting for temporal effects. This value is consistent with typical moderate air pollution conditions.
-
-The residual variance $\sigma^2$ is estimated to be around 0.32, implying a standard deviation of approximately 0.56 on the log scale. This component captures the day-to-day variability in PM2.5 concentrations within each monitoring station, reflecting short-term fluctuations due to meteorological conditions and local emission patterns.
-
-The group-level standard deviation $\tau$ is estimated at approximately 0.30. This parameter measures the variability across monitoring stations, capturing persistent differences in pollution levels due to geographical, environmental, and structural factors.
-
-Comparing these two sources of variability provides an important insight: the within-station variability is larger than the between-station variability. This suggests that short-term fluctuations in air pollution are more pronounced than systematic differences across locations. However, the magnitude of $\tau$ still indicates a non-negligible degree of heterogeneity across stations, justifying the hierarchical specification.
-
-Overall, these results highlight that both temporal variability and spatial heterogeneity play a role in shaping PM2.5 dynamics, with the hierarchical model effectively capturing both components.
 
 # Conclusion
 

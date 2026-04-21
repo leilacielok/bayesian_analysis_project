@@ -1014,3 +1014,108 @@ The distribution of replicated means and standard deviations closely matches the
 
 Furthermore, the posterior predictive density aligns well with the empirical distribution of $\log(\text{PM2.5})$, with only minor discrepancies in the peak and tail regions. 
 Overall, these results suggest that the model provides an adequate representation of the data-generating process, with no major signs of systematic misfit.
+
+# Spatial Analysis
+```{r}
+library(dplyr)
+
+stations_geo <- df %>%
+  distinct(station_id, Municipality, Latitude, Longitude, Altitude)
+```
+
+## Average random effects
+```{r}
+alpha_mean <- colMeans(post$post_alpha)
+
+station_re <- tibble(
+  station_id = levels(df_model$station_id),
+  alpha_mean = alpha_mean
+)
+
+stations_geo <- df %>%
+  distinct(station_id, Municipality, Latitude, Longitude, Altitude) %>%
+  left_join(station_re, by = "station_id")
+```
+
+# Map
+```{r}
+library(ggplot2)
+library(maps)
+
+italy_map <- map_data("world") %>%
+  dplyr::filter(region == "Italy")
+
+p_map_alpha <- ggplot() +
+  geom_polygon(
+    data = italy_map,
+    aes(x = long, y = lat, group = group),
+    fill = "grey95", color = "grey60", linewidth = 0.2
+  ) +
+  geom_point(
+    data = stations_geo,
+    aes(x = Longitude, y = Latitude, color = alpha_mean),
+    size = 2.2, alpha = 0.9
+  ) +
+  coord_quickmap(xlim = c(6, 19), ylim = c(36, 47.5)) +
+  labs(
+    title = "Monitoring stations in Italy",
+    subtitle = "Color scale based on posterior mean of station random effects",
+    x = "Longitude",
+    y = "Latitude",
+    color = expression(hat(alpha)[j])
+  ) +
+  theme_minimal()
+
+filepath <- file.path(fig_dir, "station_random_effects_map.pdf")
+ggsave(filepath, plot = p_map_alpha, width = 6.5, height = 5)
+
+```
+
+```{r}
+summary(stations_geo$alpha_mean)
+sum(is.na(stations_geo$Latitude))
+sum(is.na(stations_geo$Longitude))
+head(stations_geo)
+```
+
+```{r nord-vs-south}
+stations_geo <- stations_geo %>%
+  mutate(
+    macro_area = case_when(
+      Latitude >= 44 ~ "North",
+      Latitude >= 41.5 ~ "Center",
+      TRUE ~ "South"
+    )
+  )
+
+stations_geo %>%
+  group_by(macro_area) %>%
+  summarise(
+    n = n(),
+    mean_alpha = mean(alpha_mean),
+    median_alpha = median(alpha_mean),
+    sd_alpha = sd(alpha_mean),
+    .groups = "drop"
+  )
+```
+```{r nort-vs-sout_bayesian}
+station_info <- stations_geo %>%
+  arrange(match(station_id, levels(df_model$station_id)))
+
+north_idx  <- which(station_info$macro_area == "North")
+center_idx <- which(station_info$macro_area == "Center")
+south_idx  <- which(station_info$macro_area == "South")
+
+north_draws  <- rowMeans(post$post_alpha[, north_idx, drop = FALSE])
+center_draws <- rowMeans(post$post_alpha[, center_idx, drop = FALSE])
+south_draws  <- rowMeans(post$post_alpha[, south_idx, drop = FALSE])
+
+diff_nc <- north_draws - center_draws
+diff_ns <- north_draws - south_draws
+
+posterior_summary(diff_ns)
+mean(diff_ns > 0)
+```
+
+
+The distribution of posterior station-level random effects reveals substantial heterogeneity across monitoring locations. The estimated effects range from approximately -1.04 to 0.57 on the log scale, corresponding to differences of roughly -65% to +77% in PM2.5 levels relative to the baseline. This indicates that geographical variation plays a major role in shaping air pollution patterns, even after controlling for temporal effects.
