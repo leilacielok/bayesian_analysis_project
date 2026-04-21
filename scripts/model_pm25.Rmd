@@ -101,20 +101,13 @@ cat("Number of missing values:", sum(is.na(df[[outcome_var]])), "\n")
 cat("Number of non-positive values:", sum(df[[outcome_var]] <= 0, na.rm = TRUE), "\n")
 
 # Histogram of raw outcome
-p1 <- ggplot(df, aes(x = .data[[outcome_var]])) +
+ggplot(df, aes(x = .data[[outcome_var]])) +
   geom_histogram(bins = 40) +
   labs(
     title = "Distribution of the raw PM2.5 outcome",
     x = outcome_var,
     y = "Frequency"
   )
-
-ggsave(
-  filename = file.path(fig_dir, "hist_raw_pm25.pdf"),
-  plot = p1,
-  width = 6,
-  height = 4
-)
 
 # Skeweness of raw data
 skew_raw <- skewness(df[[outcome_var]], na.rm = TRUE)
@@ -123,20 +116,13 @@ cat("Skewness (raw):", skew_raw, "\n")
 # Histogram of log-transformed outcome
 df_pos <- df %>% filter(.data[[outcome_var]] > 0)
 
-p2 <- ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
+ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
   geom_histogram(bins = 40) +
   labs(
     title = "Distribution of the log-transformed PM2.5 outcome",
     x = paste0("log(", outcome_var, ")"),
     y = "Frequency"
   )
-
-ggsave(
-  filename = file.path(fig_dir, "hist_log_pm25.pdf"),
-  plot = p2,
-  width = 6,
-  height = 4
-)
 
 # Skeweness of log data
 skew_log <- skewness(log(df[[outcome_var]]), na.rm = TRUE)
@@ -149,6 +135,29 @@ print(summary(df_pos[[outcome_var]]))
 cat("\nSummary of log-transformed outcome:\n")
 print(summary(log(df_pos[[outcome_var]])))
 ```
+
+```{r save-combined-outcome}
+save_base_plot("hist_raw_log_pm25.pdf", 8, 4.5)
+
+par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+
+hist(df[[outcome_var]],
+     breaks = 40,
+     main = "Raw PM2.5",
+     xlab = "PM2.5",
+     ylab = "Frequency")
+
+hist(log(df_pos[[outcome_var]]),
+     breaks = 40,
+     main = "Log-transformed PM2.5",
+     xlab = "log(PM2.5)",
+     ylab = "Frequency")
+
+par(mfrow = c(1, 1))
+
+close_plot()
+```
+
 
 ## Data
 ```{r eda-panel-structure, message=FALSE, warning=FALSE}
