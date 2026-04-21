@@ -6,8 +6,8 @@ pm25_bayes.csv
 
 # R proj
 bayesian_analysis.Rproj
-scripts/model_pm25_revised.pdf
-scripts/model_pm25_revised.html
+scripts/model_pm25.pdf
+scripts/model_pm25.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
