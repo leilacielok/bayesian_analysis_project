@@ -18,6 +18,10 @@ bayesian_analysis/
 │ ├── air_quality_complete_dataset.parquet
 │ └── metadata.xlsx
 │
+├── paper/
+│ ├── figures/
+│ └── paper_pm25.Rmd
+│
 ├── scripts/
 │ ├── build_dataset.py
 │ ├── load_dataset.ipynb
