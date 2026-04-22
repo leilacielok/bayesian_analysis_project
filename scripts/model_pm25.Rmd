@@ -14,7 +14,7 @@ output:
 ---
 
 ```{r setup-save-figures, include=FALSE}
-# Create directory if it doesn't exist
+# directory for paper figures
 fig_dir <- "../paper/figures"
 if (!dir.exists(fig_dir)) {
   dir.create(fig_dir, recursive = TRUE)
@@ -29,6 +29,7 @@ save_base_plot <- function(filename, width = 6, height = 4) {
 
 # Helper function to close device
 close_plot <- function() dev.off()
+
 ```
 
 ```{r setup, include=FALSE}
@@ -897,14 +898,44 @@ baseline_row <- data.frame(
 
 sensitivity_results <- bind_rows(
   baseline_row,
-  run_one_spec(10,  5, 0.5, scenario = "B0 smaller"),
-  run_one_spec(1000, 5, 0.5, scenario = "B0 larger"),
-  run_one_spec(100, 2.5, 0.5, scenario = "A_tau smaller"),
-  run_one_spec(100, 10, 0.5, scenario = "A_tau larger"),
-  run_one_spec(100, 5, 1, scenario = "b_sigma larger")
+  run_one_spec(10,   5, 0.5, scenario = "Smaller prior variance for beta"),
+  run_one_spec(1000, 5, 0.5, scenario = "Larger prior variance for beta"),
+  run_one_spec(100, 2.5, 0.5, scenario = "Smaller A_tau"),
+  run_one_spec(100, 10, 0.5, scenario = "Larger A_tau"),
+  run_one_spec(100, 5, 1, scenario = "Larger b_sigma")
 )
 
 sensitivity_results
+
+saveRDS(sensitivity_results, file = file.path(fig_dir, "sensitivity_results.rds"))
+
+```
+
+```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(knitr)
+
+sensitivity_results %>%
+  mutate(
+    beta_intercept_mean = round(beta_intercept_mean, 3),
+    sigma2_mean = round(sigma2_mean, 3),
+    tau_mean = round(tau_mean, 3),
+    tau_accept_post = round(tau_accept_post, 3)
+  ) %>%
+  rename(
+    Scenario = scenario,
+    `c_prior` = c_prior,
+    `A_tau` = A_tau,
+    `b_sigma` = b_sigma,
+    `Intercept` = beta_intercept_mean,
+    `Sigma^2` = sigma2_mean,
+    `Tau` = tau_mean,
+    `Acceptance (tau)` = tau_accept_post
+  ) %>%
+  kable(
+    caption = "(\\#tab:sensitivity) Sensitivity analysis under alternative prior specifications. Posterior means remain stable across scenarios, supporting the robustness of the baseline results.",
+    align = "lccccccc"
+  )
 ```
 
 The sensitivity analysis shows that posterior estimates are remarkably stable across a wide range of prior specifications. In particular, the posterior mean of the intercept, the residual variance $\sigma^2$, and the hyperparameter $\tau$ remain virtually unchanged when varying the prior scale c, the hyperparameter A, and the inverse-gamma parameter $b_\sigma$. As expected, the hyperparameter $\tau$ shows slightly higher sensitivity compared to the regression coefficients, although the magnitude of variation remains negligible.
