@@ -70,6 +70,7 @@ library(e1071)
 library(tidyr)
 library(stringr)
 library(purrr)
+library(gridExtra)
 ```
 
 ```{r load-data}
@@ -160,6 +161,7 @@ close_plot()
 
 
 ## Data
+
 ```{r eda-panel-structure, message=FALSE, warning=FALSE}
 # 1. Observations per station
 obs_per_station <- df %>%
@@ -173,42 +175,18 @@ cat("Max observations per station:", max(obs_per_station$n_obs), "\n")
 
 head(obs_per_station, 10)
 
-ggplot(obs_per_station, aes(x = n_obs)) +
-  geom_histogram(bins = 30) +
-  labs(
-    title = "Distribution of observations per station",
-    x = "Number of observations",
-    y = "Frequency"
-  )
-
-# 2a Observations per month
+# 2a. Observations per month
 obs_per_month <- df %>%
   count(month, name = "n_obs") %>%
   arrange(month)
 
 print(obs_per_month)
 
-ggplot(obs_per_month, aes(x = factor(month), y = n_obs)) +
-  geom_col() +
-  labs(
-    title = "Number of observations by month",
-    x = "Month",
-    y = "Number of observations"
-  )
-
-# 2b Observations per day of week
+# 2b. Observations per day of week
 obs_per_day <- df %>%
   count(day_of_week, name = "n_obs")
 
 print(obs_per_day)
-
-ggplot(obs_per_day, aes(x = day_of_week, y = n_obs)) +
-  geom_col() +
-  labs(
-    title = "Number of observations by day of week",
-    x = "Day of week",
-    y = "Number of observations"
-  )
 
 # 3. Station-month panel structure
 station_month <- df %>%
@@ -251,34 +229,68 @@ cat("Stations with at least one completely missing month:",
 
 head(missing_months_by_station, 15)
 
-# Months missing for each station
+# 5. Months missing for each station
 missing_month_detail <- station_month_full %>%
   filter(n_obs == 0) %>%
   arrange(station_id, month)
 
 head(missing_month_detail, 20)
 
-# Heatmap of data availability by station and month
-p_heat <- ggplot(station_month_full, 
-                 aes(x = factor(month), y = factor(station_id), fill = n_obs)) +
-  geom_tile() +
-  labs(
-    title = "Data availability by station and month",
-    x = "Month",
-    y = "Station ID",
-    fill = "N obs"
-  ) +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
+# ---- Plots for the paper ----
 
-ggsave(
-  filename = file.path(fig_dir, "data_availability_heatmap.pdf"),
-  plot = p_heat,
-  width = 7,
-  height = 6
+p_obs_station <- ggplot(obs_per_station, aes(x = n_obs)) +
+  geom_histogram(
+    bins = 24,
+    fill = "grey45",
+    color = "white",
+    linewidth = 0.2
+  ) +
+  labs(
+    x = "Number of observations per station",
+    y = "Frequency"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+
+p_months_station <- ggplot(station_month, aes(x = n_months_present)) +
+  geom_bar(
+    fill = "grey45",
+    color = "white",
+    linewidth = 0.2
+  ) +
+  scale_x_continuous(breaks = 4:12) +
+  labs(
+    x = "Number of months observed per station",
+    y = "Frequency"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+
+p_panel_structure <- gridExtra::arrangeGrob(
+  p_obs_station,
+  p_months_station,
+  ncol = 2
 )
 
+# Save figure for the paper
+ggsave(
+  filename = file.path(fig_dir, "panel_structure_summary.pdf"),
+  plot = p_panel_structure,
+  width = 7,
+  height = 3.8,
+  units = "in"
+)
+
+grid::grid.newpage()
+grid::grid.draw(p_panel_structure)
 ```
+
 Exploratory analysis shows that the raw PM2.5 outcome is highly right-skewed, with a skewness of 17.06 and a long upper tail driven by extreme observations. After log transformation, skewness drops to -0.29, yielding a much more symmetric distribution and supporting the use of a Gaussian likelihood for the transformed outcome.
 
 The panel structure is markedly unbalanced across monitoring stations. The number of observations per station ranges from 69 to 332, with a median of 299.5. The dataset is also uneven across months: while most months contain between roughly 2,600 and 3,100 observations, January is severely underrepresented, with only 177 observations. Moreover, 32 stations exhibit at least one completely missing month, and the minimum temporal coverage is only 4 months for some stations. These features support the use of a hierarchical specification, which is well suited to unbalanced grouped data.
@@ -1119,3 +1131,4 @@ mean(diff_ns > 0)
 
 
 The distribution of posterior station-level random effects reveals substantial heterogeneity across monitoring locations. The estimated effects range from approximately -1.04 to 0.57 on the log scale, corresponding to differences of roughly -65% to +77% in PM2.5 levels relative to the baseline. This indicates that geographical variation plays a major role in shaping air pollution patterns, even after controlling for temporal effects.
+

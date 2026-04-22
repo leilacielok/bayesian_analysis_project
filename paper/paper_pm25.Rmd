@@ -1,51 +1,57 @@
 ---
-title: "Bayesian Hierarchical Model for PM2.5 in Italy"
+title: "Bayesian Hierarchical Model for $\\text{PM}_{2.5}$ levels in Italy"
 author: "Leila Cielok"
 date: "29-04-2026"
 output:
   bookdown::pdf_document2:
     latex_engine: xelatex
-  bookdown::html_document2: default
+    toc: true
+  bookdown::html_document2: 
+    toc: true
 fontsize: 11pt
 geometry: margin=1in
 header-includes:
   - \usepackage{placeins}
+  - \usepackage[font=footnotesize, labelfont=bf]{caption}
 ---
+
+\newpage
 
 # Introduction
 
-Air pollution represents a major environmental and public health concern. In particular, fine particulate matter (PM2.5) is among the most harmful pollutants due to its ability to penetrate deep into the respiratory system and its strong association with cardiovascular and respiratory diseases.
+Air pollution represents a major environmental and public health concern. Specifically, fine particulate matter $\text{PM}_{2.5}$ is among the most harmful pollutants due to its ability to penetrate deep into the respiratory system and its strong association with cardiovascular and pulmonary diseases.
 
-A key challenge in modeling PM2.5 concentrations lies in the presence of substantial heterogeneity across monitoring stations and irregular temporal coverage. Stations differ in terms of geographical characteristics, local emission sources, and environmental conditions, while observational data often exhibit an unbalanced panel structure, with varying numbers of observations across stations and missing time periods.
+A key challenge in modeling $\text{PM}_{2.5}$ concentrations lies in the presence of substantial heterogeneity across monitoring stations and irregular temporal coverage. Stations differ significantly in terms of geographical characteristics, local emission sources, and environmental conditions, while observational data often exhibit an unbalanced panel structure, with varying numbers of observations across stations and missing time periods.
 
-In this context, Bayesian hierarchical models provide a natural and flexible framework. By introducing group-level random effects, these models allow for partial pooling, enabling information sharing across stations while preserving local heterogeneity. Moreover, the Bayesian approach provides a coherent framework for uncertainty quantification and prior specification.
+In this context, Bayesian hierarchical models provide a natural and flexible framework to account for these complexities. By introducing group-level random effects, these models allow for partial pooling, enabling information sharing across stations while preserving local heterogeneity. Moreover, the Bayesian approach provides a coherent framework for uncertainty quantification and prior specification.
 
-This paper develops a Bayesian hierarchical model for daily PM2.5 concentrations observed across monitoring stations in Italy. Posterior inference is carried out using a Metropolis-within-Gibbs sampler. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
+This paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy. Posterior inference is carried out using a Metropolis-within-Gibbs sampler. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
 
 # Data
 
-The dataset consists of daily PM2.5 measurements collected across monitoring stations in Italy during 2025. After preprocessing, the final dataset contains 31,349 observations across 116 stations.
+The dataset comprises daily $\text{PM}_{2.5}$ concentration measurements collected across monitoring stations in Italy during 2025. The raw data were sourced from the European Environment Agency (EEA) Air Quality portal, specifically via the [EEA Air Quality e-Reporting](https://eeadmz1-downloads-webapp.azurewebsites.net/), with metadata and station specifications validated through the [EEA Air Quality Viewer](https://discomap.eea.europa.eu/App/AQViewer/index.html?fqn=Airquality_Dissem.b2g.measurements). After preprocessing and quality control, the final dataset contains 31,349 observations distributed across 116 stations.
 
-The empirical distribution of the raw outcome variable is highly right-skewed, with a skewness of approximately 17. This strong asymmetry is driven by extreme values in the upper tail. To address this issue, a logarithmic transformation is applied:
+The empirical distribution of the raw outcome variable is highly right-skewed, with a skewness of approximately 17.1. This strong asymmetry is primarily driven by extreme pollution events in the upper tail. To stabilize the variance and satisfy the distributional assumptions of the proposed model, a logarithmic transformation was applied
 
 $$
-\tilde{y}_i = \log(y_i),
+\log(\text{PM}_{2.5, it}) = y_{it}
 $$
+where $y_{it}$ represents the transformed concentration for station $i$ at time $t$. This transformation substantially reduces skewness (to approximately -0.29), yielding a more symmetric distribution (visible in Figure \@ref(fig:fig-outcome)) that justifies the use of a Gaussian likelihood. 
 
-which substantially reduces skewness (approximately -0.29) and yields a more symmetric distribution, supporting the use of a Gaussian likelihood.
-Figure \@ref(fig:fig-outcome) illustrates the strong right-skewness of the raw PM2.5 concentrations and the substantial improvement in symmetry obtained after the logarithmic transformation.
-
-```{r fig-outcome, echo=FALSE, fig.cap="Distribution of raw and log-transformed PM2.5 concentrations.", out.width="90%"}
-knitr::include_graphics("figures/hist_raw_log_pm25.pdf")
+```{r fig-outcome, echo=FALSE, fig.cap="Distribution of raw and log-transformed PM2.5 concentrations.", fig.align='center'}
+knitr::include_graphics("figures/hist_log_pm25.pdf")
 ```
 
-The panel structure is markedly unbalanced. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Additionally, temporal coverage varies across stations: some are observed for the entire year, while others are only observed for a limited number of months. In particular, 32 stations exhibit at least one completely missing month, and the minimum coverage is only 4 months. The unbalanced panel structure is clearly visible in Figure \@ref(fig:fig-availability).
+\FloatBarrier 
 
-```{r fig-availability, echo=FALSE, fig.cap="Data availability by station and month. The panel is highly unbalanced, with heterogeneous temporal coverage and several missing station-month combinations.", fig.width=7, fig.height=5}
-knitr::include_graphics("figures/data_availability_heatmap.pdf")
+The panel structure is markedly unbalanced, a common feature in environmental monitoring networks. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Temporal coverage is also uneven across stations. While most stations provide observations for most of the year, 32 stations lack at least one full month of data, and for a few stations coverage drops to only 4 months. This heterogeneity is summarized in Figure \@ref(fig:fig-availability), which reports both the distribution of the number of observations per station and the distribution of the number of months observed per station. Such an irregular structure poses a challenge for standard time-series methods.
+
+```{r fig-availability, echo=FALSE, out.width="80%", fig.cap="Data availability by station and month. Darker areas indicate months with fewer observations.", fig.align='center'}
+knitr::include_graphics("figures/panel_structure_summary.pdf")
 ```
 
-These features motivate the use of a hierarchical specification, which is well suited to handle unbalanced grouped data.
+\FloatBarrier
+The hierarchical nature of the data and the irregular sampling motivate the use of a Bayesian hierarchical specification, since such a framework is naturally suited to handle unbalanced grouped data by leveraging information across the entire network while accounting for station-specific nuances.
 
 # Model
 
@@ -241,3 +247,5 @@ This paper develops a Bayesian hierarchical model for daily PM2.5 concentrations
 The Metropolis-within-Gibbs sampler exhibits good convergence properties, supported by multiple diagnostic tools. Posterior inference is robust to prior specification, and posterior predictive checks indicate a satisfactory model fit.
 
 Overall, the hierarchical Bayesian framework provides a flexible and effective approach for modeling air pollution data. Possible extensions include the incorporation of spatial dependence across stations, the use of more flexible likelihood specifications, and the inclusion of additional covariates capturing environmental and meteorological factors.
+
+\end{document}
