@@ -118,13 +118,18 @@ cat("Skewness (raw):", skew_raw, "\n")
 # Histogram of log-transformed outcome
 df_pos <- df %>% filter(.data[[outcome_var]] > 0)
 
-ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
+p1 <- ggplot(df_pos, aes(x = log(.data[[outcome_var]]))) +
   geom_histogram(bins = 40) +
   labs(
-    title = "Distribution of the log-transformed PM2.5 outcome",
     x = paste0("log(", outcome_var, ")"),
     y = "Frequency"
   )
+ggsave(
+  filename = file.path(fig_dir, "hist_log_pm25.pdf"),
+  plot = p1,
+  width = 6,
+  height = 4
+)
 
 # Skeweness of log data
 skew_log <- skewness(log(df[[outcome_var]]), na.rm = TRUE)
