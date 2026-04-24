@@ -723,7 +723,7 @@ for (j in alpha_idx) {
 
 ## Visualization: ACF
 ```{r acf-plots, fig.width=10, fig.height=8}
-par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+par(mfrow = c(2, 2), mar = c(4, 4, 5, 1))
 
 acf(mcmc_fit$beta[, 1],
     main = expression(paste("ACF of ", beta[1])))
@@ -781,20 +781,29 @@ The trace plots of the post-burn-in chains show no evidence of non-stationarity 
 
 ## ACF post burn-in
 
+## ACF post burn-in
 ```{r post-burnin-acf, fig.width=10, fig.height=8}
 save_base_plot("acf_postburn.pdf", 7, 6)
 
-par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+par(mfrow = c(2, 2), mar = c(4, 4, 5, 1))
 
-acf(post$post_beta[, 1])
-acf(post$post_beta[, 2])
-acf(post$post_sigma2)
-acf(post$post_tau)
+acf(post$post_beta[, 1],
+    main = expression(paste("ACF of ", beta[1])))
+
+acf(post$post_beta[, 2],
+    main = expression(paste("ACF of ", beta[2])))
+
+acf(post$post_sigma2,
+    main = expression(paste("ACF of ", sigma^2)))
+
+acf(post$post_tau,
+    main = expression(paste("ACF of ", tau)))
 
 par(mfrow = c(1, 1))
 
 close_plot()
 ```
+
 ## ESS
 
 ```{r}
@@ -916,7 +925,7 @@ saveRDS(sensitivity_results, file = file.path(fig_dir, "sensitivity_results.rds"
 
 ```
 
-```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE}
+```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
 library(dplyr)
 library(knitr)
 
@@ -929,16 +938,19 @@ sensitivity_results %>%
   ) %>%
   rename(
     Scenario = scenario,
-    `c_prior` = c_prior,
-    `A_tau` = A_tau,
-    `b_sigma` = b_sigma,
-    `Intercept` = beta_intercept_mean,
-    `Sigma^2` = sigma2_mean,
-    `Tau` = tau_mean,
-    `Acceptance (tau)` = tau_accept_post
+    `$c$` = c_prior,
+    `$A_{\\tau}$` = A_tau,
+    `$b_{\\sigma}$` = b_sigma,
+    `$(\\beta_0)$` = beta_intercept_mean,
+    `$\\sigma^2$` = sigma2_mean,
+    `$\\tau$` = tau_mean,
+    `Acceptance ($\\tau$)` = tau_accept_post
   ) %>%
   kable(
-    caption = "(\\#tab:sensitivity) Sensitivity analysis under alternative prior specifications. Posterior means remain stable across scenarios, supporting the robustness of the baseline results.",
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,   
+    caption = "(\\#tab:sensitivity) Sensitivity analysis under alternative prior specifications.",
     align = "lccccccc"
   )
 ```
@@ -1106,8 +1118,6 @@ p_map_alpha <- ggplot() +
   ) +
   coord_quickmap(xlim = c(6, 19), ylim = c(36, 47.5)) +
   labs(
-    title = "Monitoring stations in Italy",
-    subtitle = "Color scale based on posterior mean of station random effects",
     x = "Longitude",
     y = "Latitude",
     color = expression(hat(alpha)[j])

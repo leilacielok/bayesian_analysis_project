@@ -131,13 +131,13 @@ The algorithm therefore alternates between Gibbs updates for $\beta$, $\alpha$, 
 
 ## Implementation details
 
-Hyperparameters are selected to induce weakly informative priors. For the regression coefficients, the prior covariance matrix is set to $B_0 = cI$, with baseline choice $c = 100$, implying a large prior variance and only mild shrinkage toward zero. For the observation variance, the inverse-gamma hyperparameters are fixed at $a_\sigma = 2$ and $b_\sigma = 0.5$, yielding a diffuse prior. The value $b_\sigma = 0.5$ is chosen to be consistent with the empirical scale of the log-transformed outcome (whose sample variance is approximately $0.47$), while remaining sufficiently weakly informative. The scale parameter of the half-Cauchy prior on $\tau$ is set to $A = 5$, allowing for substantial between-station variability while still providing regularization. The robustness of posterior inference to alternative hyperparameter choices is examined through a dedicated sensitivity analysis.
+Hyperparameters are selected to induce weakly informative priors. For the regression coefficients, the prior covariance matrix is set to $B_0 = cI$, with baseline choice $c = 100$, implying a large prior variance and only mild shrinkage toward zero. For the observation variance, the inverse-gamma hyperparameters are fixed at $a_\sigma = 2$ and $b_\sigma = 0.5$, yielding a diffuse prior. The value $b_\sigma = 0.5$ is chosen to be consistent with the empirical scale of the log-transformed outcome (whose sample variance is approximately $0.47$), while remaining sufficiently weakly informative. The scale parameter of the half-Cauchy prior on $\tau$ is set to $A = 5$, allowing for substantial between-station variability while still providing regularization. The robustness of posterior inference to alternative hyperparameter choices is examined through a dedicated sensitivity analysis in Section 4.4.
 
-Posterior inference is performed using a Metropolis-within-Gibbs algorithm. The sampler is run for 5{,}000 iterations, with the first 200 discarded as burn-in. To reduce autocorrelation, the chain is thinned by retaining every 5th draw.
+Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 5,000 iterations, with the first 200 discarded as burn-in. To reduce autocorrelation, the chain is thinned by retaining every 5th draw.
 
-The Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. A tuning exercise is conducted to calibrate the proposal variance. With a proposal standard deviation of 0.15, the acceptance rate is approximately 0.48, while increasing it to 0.20 reduces the rate to approximately 0.38. Since posterior summaries and diagnostic plots are essentially unaffected, the larger proposal scale is retained to improve exploration of the parameter space.
+As mentioned before, the Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. A tuning exercise is conducted to calibrate the proposal variance. With a proposal standard deviation of 0.15, the acceptance rate is approximately 0.48, while increasing it to 0.20 reduces the rate to approximately 0.38. Since posterior summaries and diagnostic plots are essentially unaffected, the larger proposal scale is retained to improve exploration of the parameter space.
 
-Convergence is assessed using graphical diagnostics (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic and the effective sample size.
+Finally, convergence is assessed using both graphical (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic and the effective sample size.
 
 # Results
 
@@ -175,7 +175,9 @@ kable(
   format = "latex",
   booktabs = TRUE,
   caption = "Convergence diagnostics and effective sample sizes for key parameters",
-  escape = FALSE
+  escape = FALSE,
+  table.envir = "table",
+  position = "H"
 )
 ```
 
@@ -287,31 +289,33 @@ From a computational perspective, acceptance rates for the Metropolis step on $\
 
 Table \@ref(tab:sensitivity) reports the posterior means of the main parameters under the alternative prior configurations.
 
-```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE}
-library(dplyr)
+```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE, results='asis', cache=FALSE}
 library(knitr)
+
 sensitivity_results <- readRDS("figures/sensitivity_results.rds")
-sensitivity_results %>%
-  mutate(
-    beta_intercept_mean = round(beta_intercept_mean, 3),
-    sigma2_mean = round(sigma2_mean, 3),
-    tau_mean = round(tau_mean, 3),
-    tau_accept_post = round(tau_accept_post, 3)
-  ) %>%
-  rename(
-    Scenario = scenario,
-    `c_prior` = c_prior,
-    `A_tau` = A_tau,
-    `b_sigma` = b_sigma,
-    `Intercept` = beta_intercept_mean,
-    `Sigma^2` = sigma2_mean,
-    `Tau` = tau_mean,
-    `Acceptance (tau)` = tau_accept_post
-  ) %>%
-  kable(
-    caption = "(\\#tab:sensitivity) Sensitivity analysis under alternative prior specifications.",
-    align = "lccccccc"
-  )
+
+tab_sensitivity <- data.frame(
+  Scenario = gsub("_", " ", sensitivity_results$scenario),  # evita errore LaTeX
+  "$c$" = round(sensitivity_results$c_prior, 3),
+  "$A_{\\tau}$" = round(sensitivity_results$A_tau, 3),
+  "$b_{\\sigma}$" = round(sensitivity_results$b_sigma, 3),
+  "$\\beta_0$" = round(sensitivity_results$beta_intercept_mean, 3),
+  "$\\sigma^2$" = round(sensitivity_results$sigma2_mean, 3),
+  "$\\tau$" = round(sensitivity_results$tau_mean, 3),
+  "Acceptance ($\\tau$)" = round(sensitivity_results$tau_accept_post, 3),
+  check.names = FALSE
+)
+
+kable(
+  tab_sensitivity,
+  format = "latex",
+  booktabs = TRUE,
+  caption = "(\\#tab:sensitivity) Sensitivity analysis under alternative prior specifications.",
+  escape = FALSE,
+  table.envir = "table",
+  position = "H",
+  align = "lccccccc"
+)
 ```
 
 \FloatBarrier
