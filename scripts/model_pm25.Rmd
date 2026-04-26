@@ -428,11 +428,11 @@ A_tau <- 5
 # -----------------------------
 # MCMC settings
 # -----------------------------
-n_iter <- 5000
+n_iter <- 10000
 burn_in <- 1000
 
 # proposal sd for log(tau)
-proposal_sd_tau <- 0.15
+proposal_sd_tau <- 0.2
 
 # -----------------------------
 # Initial values
@@ -511,8 +511,8 @@ This distribution does not belong to a standard family, hence we use a Metropoli
 ```{r sampler-function}
 run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
                             b0, B0, a_sigma, b_sigma, A_tau,
-                            n_iter = 5000,
-                            proposal_sd = 0.15,
+                            n_iter = 10000,
+                            proposal_sd = 0.2,
                             seed = 123) {
 
   set.seed(seed)
@@ -641,7 +641,7 @@ log_target_eta <- function(eta, alpha, A_tau) {
 ## Postprocessing formula
 
 ```{r}
-post_process_mcmc <- function(mcmc_fit, burn_in = 100, thin = 1) {
+post_process_mcmc <- function(mcmc_fit, burn_in = 500, thin = 1) {
   n_iter <- nrow(mcmc_fit$beta)
   if (burn_in >= n_iter) stop("burn_in must be smaller than total iterations")
   if (thin < 1) stop("thin must be >= 1")
@@ -676,7 +676,7 @@ mcmc_fit <- run_mwg_sampler(
   a_sigma = a_sigma,
   b_sigma = b_sigma,
   A_tau = A_tau,
-  n_iter = 5000,
+  n_iter = 10000,
   proposal_sd = 0.2,
   seed = 123
 )
@@ -748,7 +748,7 @@ for (j in alpha_idx) {
 
 ## Choose burn in iterations
 ```{r choose-burnin}
-burn_in <- 200
+burn_in <-2000
 
 post <- post_process_mcmc(mcmc_fit, burn_in = burn_in, thin = 5)
 
@@ -888,7 +888,6 @@ tau_hpd    <- HPDinterval(mcmc_tau, prob = 0.95)
 ```{r}
 HPDinterval(mcmc_beta)
 ```
-
 
 # Sensitivity analysis
 
@@ -1055,7 +1054,13 @@ geweke_summary
 
 ```
 
-The Geweke diagnostic provides no evidence against convergence. All z-scores are well below the conventional threshold of 1.96 in absolute value, both for the main model parameters and for the selected random effects. This finding is consistent with the visual inspection of the trace plots and supports the use of the retained draws for posterior inference.
+```{r}
+geweke_beta <- geweke.diag(mcmc_beta)$z
+geweke_alpha <- geweke.diag(mcmc_alpha)$z
+
+sum(abs(geweke_beta) > 2)
+sum(abs(geweke_alpha) > 2)
+```
 
 
 # Posterior Predictive Checks
@@ -1275,9 +1280,9 @@ spatial_table <- lapply(names(area_draws), function(x) {
       "[", round(`95% HPD lower`, 3),
       ", ", round(`95% HPD upper`, 3), "]"
     ),
-    `Pr(>0)` = round(`Pr(>0)`, 3)
+    `Pr(>0)` = round(`Posterior probability`, 3)
   ) %>%
-  dplyr::select(Area, Mean, `95% HPD interval`, `Pr(>0)`)
+  dplyr::select(Area, Mean, `95% HPD interval`, `Posterior probability`)
 
 spatial_table
 ```

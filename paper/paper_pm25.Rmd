@@ -104,7 +104,7 @@ where:
 Station-specific effects are modeled as draws from a common Gaussian population distribution:
 
 $$
-\alpha_j \mid \tau^2 \sim \mathcal{N}(0, \tau^2), \quad j = 1, \dots, J,
+\alpha_j \mid \tau \sim \mathcal{N}(0, \tau^2), \quad j = 1, \dots, J,
 $$
 
 where \( \tau^2 \) captures the cross-station variability in baseline pollution levels.
@@ -153,15 +153,15 @@ The algorithm therefore alternates between Gibbs updates for $\beta$, $\alpha$, 
 
 Hyperparameters are selected to induce weakly informative priors. For the regression coefficients, the prior covariance matrix is set to $B_0 = cI$, with baseline choice $c = 100$, implying a large prior variance and only mild shrinkage toward zero. For the observation variance, the inverse-gamma hyperparameters are fixed at $a_\sigma = 2$ and $b_\sigma = 0.5$, yielding a diffuse prior. The value $b_\sigma = 0.5$ is chosen to be consistent with the empirical scale of the log-transformed outcome (whose sample variance is approximately $0.47$), while remaining sufficiently weakly informative. The scale parameter of the half-Cauchy prior on $\tau$ is set to $A = 5$, allowing for substantial between-station variability while still providing regularization. The robustness of posterior inference to alternative hyperparameter choices is examined through a dedicated sensitivity analysis reported below.
 
-Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 5,000 iterations. Burn-in and thinning are applied as post-processing steps: the first 200 iterations are discarded and every 5th remaining draw is retained.
+Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 10,000 iterations. Burn-in and thinning are applied as post-processing steps: the first 2,000 iterations are discarded and every 5th remaining draw is retained.
 
-The Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. After tuning, a proposal standard deviation of 0.20 is adopted, yielding an acceptance rate of approximately 0.38. Posterior summaries and diagnostic plots are essentially unaffected by alternative choices, so this specification is retained for the final MCMC run.
+The Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. After tuning, a proposal standard deviation of 0.20 is adopted, yielding an acceptance rate of approximately 0.37. Posterior summaries and diagnostic plots are essentially unaffected by alternative choices, so this specification is retained for the final MCMC run.
 
 Finally, convergence is assessed using both graphical (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic and the effective sample size.
 
 ### Sensitivity to prior specification {#sec:sensitivity}
 
-To assess whether posterior inference is materially affected by the baseline prior calibration, a one-at-a-time sensitivity analysis is performed. Starting from the baseline configuration $c=100$, $A_\tau=5$, and $b_\sigma=0.5$, each hyperparameter is varied separately while keeping the others fixed.
+To assess whether posterior inference is materially affected by the baseline prior calibration, a one-at-a-time sensitivity analysis is performed. Starting from the baseline configuration \(c=100\), \(A_\tau=5\), and \(b_\sigma=0.5\), each hyperparameter is varied separately while keeping the others fixed. For computational efficiency, the sensitivity runs are based on shorter auxiliary chains of 5,000 iterations, with the first 200 discarded as burn-in and the same thinning rule applied as in the baseline analysis. Since the purpose of this exercise is to assess the stability of posterior summaries rather than to obtain the final inferential estimates, this reduced MCMC setting is considered adequate.
 
 Three prior components are examined. First, the prior variance of the regression coefficients is changed by setting $c=10$ and $c=1000$. Second, the scale parameter of the half-Cauchy prior on the station-level standard deviation is varied from $A_\tau=5$ to $A_\tau=2.5$ and $A_\tau=10$. Third, the inverse-gamma scale parameter for the observation variance is increased from $b_\sigma=0.5$ to $b_\sigma=1$, while keeping $a_\sigma=2$ fixed.
 
@@ -229,12 +229,7 @@ knitr::include_graphics("figures/acf_postburn.pdf")
 
 Autocorrelation functions were also inspected for representative regression coefficients and station-specific effects, selected based on their effective sample size to capture parameters with low, median, and high mixing efficiency. While some persistence is observed at low lags for a subset of parameters, particularly among station effects, autocorrelation decays steadily and remains within acceptable bounds. This pattern is consistent with the effective sample size results, which indicate some heterogeneity in mixing across parameters but no evidence of pathological behavior.
 
-The Geweke diagnostic further supports convergence. Instead of reporting individual diagnostics for each regression coefficient and station effect, Table \@ref(tab:tab-geweke) summarizes the Geweke $z$-scores by parameter block. All reported values lie within the conventional acceptance interval $[-2,2]$, providing no evidence against convergence.
-
-For the regression coefficients, the Geweke $z$-scores range from $-1.731$ to $0.223$, with an average value of $-0.671$. Similarly, for the station-specific effects, the values range from $-0.777$ to $1.166$, with an average value of $-0.037$. These results indicate no systematic deviation from stationarity across either block.
-
-The variance components show $z$-scores close to zero, equal to $-0.649$ for $\sigma^2$ and $-0.200$ for $\tau$, further supporting convergence of the global parameters.
-
+The Geweke diagnostic further supports convergence. All regression coefficients have \(z\)-scores within the conventional interval \([-2,2]\). For the station-specific effects, only one out of 116 values falls slightly outside this range. This isolated exceedance does not suggest systematic non-stationarity, especially in light of the stable trace plots and rapidly decaying autocorrelation functions.
 
 ```{r tab-geweke, echo=FALSE, warning=FALSE, message=FALSE}
 library(knitr)
@@ -262,7 +257,6 @@ Overall, the trace plots, autocorrelation functions, and Geweke diagnostics cons
 ## Posterior inference
 
 The posterior estimates shown in Table \@ref(tab:posterior-effects) provide a clear characterization of the main sources of variation in PM2.5 concentrations.
-
 ```{r tab-coefficients, echo=FALSE, results='asis', warning=FALSE, message=FALSE}
 library(knitr)
 library(coda)
@@ -274,35 +268,37 @@ beta_hpd <- HPDinterval(mcmc_beta, prob = 0.95)
 beta_mean <- colMeans(post$post_beta)
 
 CI <- paste0(
-  "[", round(beta_hpd[, "lower"], 3),
-  ", ", round(beta_hpd[, "upper"], 3), "]"
+  "$[", round(beta_hpd[, "lower"], 3),
+  ",\\ ", round(beta_hpd[, "upper"], 3), "]$"
+)
+
+effects <- c(
+  paste0("Baseline ($\\sim$", round(exp(beta_mean[1]), 1), ")"),
+  paste0("$", sprintf("%.1f", 100 * (exp(beta_mean[2:12]) - 1)), "\\%$")
 )
 
 tab <- data.frame(
   Variable = c("Intercept (Jan, Mon)", "February", "March", "April", "May",
                "June", "July", "August", "September", "October", "November", "December"),
   Mean = round(beta_mean[1:12], 3),
-  `95% HPD interval` = CI[1:12],
-  Effect = c("Baseline (~13.5)", "-1.6%", "-30.4%", "-45.9%", "-52.4%",
-             "-11.3%", "-45.0%", "-34.6%", "-55.0%", "-45.4%", "-31.7%", "+7.0%"),
+  `95\\% HPD interval` = CI[1:12],
+  Effect = effects,
   check.names = FALSE
 )
 
-print(
-  kable(
-    tab,
-    format = "latex",
-    booktabs = TRUE,
-    escape = TRUE,
-    caption = "(\\#tab:posterior-effects) Posterior means, 95\\% HPD intervals, and approximate percentage effects relative to the baseline category.",
-    align = "lccc"
-  )
+kable(
+  tab,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  caption = "(\\#tab:posterior-effects) Posterior means, 95\\% HPD intervals, and approximate percentage effects relative to the baseline category.",
+  align = "lccc"
 )
 ```
 
 The reported credible intervals are 95\% highest posterior density (HPD) intervals. Effects whose intervals exclude zero are interpreted as credibly different from the baseline category.
 
-The intercept represents the expected value of the log-transformed outcome for the reference category (January, Monday) at an average station. Its posterior mean is approximately 2.60, corresponding to a baseline PM2.5 level of about `r round(exp(2.603),1)` on the original scale. 
+The intercept represents the expected value of the log-transformed outcome for the reference category (January, Monday) at an average station. Its posterior mean is approximately 2.60, corresponding to a baseline PM2.5 level of about `r round(exp(2.608),1)` on the original scale. 
 
 In addition, the posterior estimate of the residual standard deviation exceeds the group-level standard deviation, indicating that within-station variability is larger than persistent cross-station heterogeneity. In other words, day-to-day fluctuations in PM2.5 concentrations within the same monitoring site appear to be more substantial than the average differences in baseline pollution levels across stations. 
 
@@ -313,13 +309,13 @@ From a modeling perspective, this result supports the use of a hierarchical spec
 
 ### Temporal effects  
 
-The temporal coefficients reported in Table \@ref(tab:posterior-effects) are now interpreted in detail. A strong seasonal pattern emerges, as relative to January, nearly all months exhibit negative coefficients, indicating substantially lower pollution levels throughout most of the year.
+The temporal coefficients reported in Table \@ref(tab:posterior-effects) are now interpreted in detail. A strong and clearly identifiable seasonal pattern emerges, as relative to January, nearly all months exhibit negative coefficients, indicating substantially lower pollution levels throughout most of the year.
 
-The magnitude of these effects is substantively large: spring, summer, and early autumn months are associated with reductions often exceeding 30–50%. December and February appear indistinguishable from January in posterior terms, suggesting a return to high pollution levels during winter.
+The magnitude of these effects is substantively large: spring, summer, and early autumn months are associated with reductions often exceeding 30–50%. December and February appear statistically indistinguishable from January in posterior terms, as their credible intervals include zero, although their point estimates suggest slightly lower pollution levels.
 
 This pattern is consistent with well-known environmental mechanisms, including increased heating emissions and less favorable atmospheric dispersion conditions during colder months.
 
-For compactness, Table \@ref(tab:posterior-effects) reports only the intercept and monthly effects. The omitted day-of-week coefficients are small and their 95\% HPD intervals include zero, suggesting no systematic weekly cycle once seasonal and station-level heterogeneity are accounted for.
+For compactness, Table \@ref(tab:posterior-effects) reports only the intercept and monthly effects. The omitted day-of-week coefficients are generally small. Most of their 95\% HPD intervals include zero, with the exception of Saturday, which shows a small positive effect relative to Monday, approximately equal to 2.6\%. This suggests at most a weak day-of-week pattern once seasonal and station-level heterogeneity are accounted for.
 
 ### Spatial effects
 
@@ -377,9 +373,9 @@ knitr::include_graphics("figures/ppc_moments.pdf")
 
 \FloatBarrier
 
-The distribution of replicated means and standard deviations is consistent with the observed values (see Figures \@ref(fig:fig-ppc-density) and \@ref(fig:fig-ppc-moments)), indicating that the model accurately captures the first two moments of the data.
+The distribution of replicated means and standard deviations is broadly consistent with the observed values (see Figures 6 and 7), with the observed statistics lying well within the distribution of replicated values. This suggests that the model provides an adequate representation of the first two moments of the data.
 
-Furthermore, the posterior predictive density aligns well with the empirical distribution of log-transformed PM2.5, with only minor discrepancies in the peak and tail regions. These differences are consistent with the Gaussian assumption and do not indicate major model misspecification.
+Furthermore, the posterior predictive density aligns reasonably well with the empirical distribution of log-transformed PM2.5, although minor discrepancies are visible in the peak and tail regions. These differences are consistent with the Gaussian assumption and do not indicate major model misspecification.
 
 Robustness checks based on alternative prior calibrations, reported in Section \@ref(sec:sensitivity), confirm that the main posterior conclusions are stable.
 
@@ -387,9 +383,9 @@ Robustness checks based on alternative prior calibrations, reported in Section \
 
 This paper develops a Bayesian hierarchical model for daily PM2.5 concentrations, explicitly accounting for heterogeneity across monitoring stations and the unbalanced structure of the panel.
 
-The Metropolis-within-Gibbs sampler exhibits satisfactory convergence behavior, as supported by multiple diagnostic tools. Posterior inference appears stable with respect to prior specification, and posterior predictive checks indicate that the model is able to capture the main features of the observed data.
+The Metropolis-within-Gibbs sampler exhibits satisfactory convergence behavior, as supported by multiple diagnostic tools. Posterior inference appears stable with respect to prior specification, and posterior predictive checks indicate that the model is able to capture the main features of the observed data reasonably well.
 
-From a substantive perspective, the results highlight a pronounced seasonal pattern, with substantially higher PM2.5 levels during winter months. This finding reinforces the relevance of seasonally targeted environmental policies, particularly those addressing emissions related to heating systems and increased urban activity. By contrast, the absence of a clear weekly cycle suggests that short-term policy interventions (e.g., day-specific restrictions) may be insufficient unless embedded within broader, structural measures.
+From a substantive perspective, the results highlight a pronounced seasonal pattern, with substantially higher PM2.5 levels during winter months. This finding reinforces the relevance of seasonally targeted environmental policies, particularly those addressing emissions related to heating systems and increased urban activity. By contrast, there is little evidence of a strong weekly cycle: most day-of-week effects are small and not credibly different from zero, although Saturday shows a modest positive deviation. This suggests that short-term policy interventions (e.g., day-specific restrictions) may be insufficient unless embedded within broader, structural measures.
 
 In addition, the presence of persistent differences across monitoring stations, together with the identified North–South gradient, points to the importance of geographically differentiated policy approaches. These results are consistent with the idea that local environmental conditions, urban structure, and regional economic activity jointly shape air pollution dynamics.
 
@@ -405,4 +401,4 @@ These limitations suggest several directions for future research. Extending the 
 
 More flexible likelihood specifications (e.g., heavy-tailed or skewed distributions) may also be considered to better capture extreme pollution episodes. Finally, the framework could be extended to a fully spatio-temporal hierarchical model, providing a unified approach to jointly model temporal dynamics and spatial interactions.
 
-Overall, the hierarchical Bayesian framework proves to be a flexible and effective tool for the analysis of air pollution data, offering both methodological rigor and policy-relevant insights.
+Overall, the hierarchical Bayesian framework provides a flexible and effective approach for the analysis of air pollution data, offering both methodological rigor and policy-relevant insights.
