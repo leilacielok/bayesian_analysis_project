@@ -155,7 +155,7 @@ Hyperparameters are selected to induce weakly informative priors. For the regres
 
 Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 5,000 iterations. Burn-in and thinning are applied as post-processing steps: the first 200 iterations are discarded and every 5th remaining draw is retained.
 
-The Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. A tuning exercise is conducted to calibrate the proposal variance. With a proposal standard deviation of 0.15, the acceptance rate is approximately 0.48, while increasing it to 0.20 reduces the rate to approximately 0.38. Since posterior summaries and diagnostic plots are essentially unaffected, the larger proposal scale is retained to improve exploration of the parameter space.
+The Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. After tuning, a proposal standard deviation of 0.20 is adopted, yielding an acceptance rate of approximately 0.38. Posterior summaries and diagnostic plots are essentially unaffected by alternative choices, so this specification is retained for the final MCMC run.
 
 Finally, convergence is assessed using both graphical (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic and the effective sample size.
 
@@ -172,8 +172,15 @@ library(knitr)
 
 sensitivity_results <- readRDS("figures/sensitivity_results.rds")
 
+scenario_labels <- sensitivity_results$scenario
+
+scenario_labels <- gsub("beta", "$\\\\beta$", scenario_labels)
+scenario_labels <- gsub("A_tau", "$A_{\\\\tau}$", scenario_labels)
+scenario_labels <- gsub("b_sigma", "$b_{\\\\sigma}$", scenario_labels)
+scenario_labels <- gsub("_", " ", scenario_labels)
+
 tab_sensitivity <- data.frame(
-  Scenario = gsub("_", " ", sensitivity_results$scenario),  #
+  Scenario = scenario_labels,
   "$c$" = round(sensitivity_results$c_prior, 3),
   "$A_{\\tau}$" = round(sensitivity_results$A_tau, 3),
   "$b_{\\sigma}$" = round(sensitivity_results$b_sigma, 3),
@@ -244,11 +251,11 @@ geweke_summary %>%
     booktabs = TRUE,
     escape = FALSE,
     caption = "(\\#tab:geweke) Summary of Geweke diagnostic z-scores by parameter block.",
-    align = "lccc"
+    align = "lccc",
+    position = "H"
   )
 ```
 
-\FloatBarrier
 
 Overall, the trace plots, autocorrelation functions, and Geweke diagnostics consistently indicate that the sampler mixes satisfactorily and provides reliable posterior draws for subsequent inference.
 

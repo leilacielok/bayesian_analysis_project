@@ -779,7 +779,7 @@ close_plot()
 
 ## ESS + Visual Inspection
 
-```{r acf-alpha-representative, message=FALSE, warning=FALSE}
+```{r acf-beta-alpha-representative, message=FALSE, warning=FALSE}
 library(coda)
 
 mcmc_beta   <- mcmc(post$post_beta)
@@ -790,22 +790,25 @@ mcmc_tau    <- mcmc(post$post_tau)
 ess_beta  <- effectiveSize(mcmc_beta)
 ess_alpha <- effectiveSize(mcmc_alpha)
 
-# representative alphas
+# Representative alphas: lowest, median, highest ESS
 alpha_idx <- c(
   which.min(ess_alpha),
-  order(ess_alpha)[round(length(ess_alpha)/2)],
+  order(ess_alpha)[round(length(ess_alpha) / 2)],
   which.max(ess_alpha)
+)
+
+# Representative betas: lowest, median, highest ESS
+beta_idx <- c(
+  which.min(ess_beta),
+  order(ess_beta)[round(length(ess_beta) / 2)],
+  which.max(ess_beta)
 )
 
 alpha_idx
 ess_alpha[alpha_idx]
 
-# representative betas
-beta_idx <- c(
-  which.min(ess_beta),
-  order(ess_beta)[round(length(ess_beta)/2)],
-  which.max(ess_beta)
-)
+beta_idx
+ess_beta[beta_idx]
 
 # ACF of representative alphas
 par(mfrow = c(1, 3), mar = c(4, 4, 4, 1))
@@ -813,26 +816,27 @@ par(mfrow = c(1, 3), mar = c(4, 4, 4, 1))
 for (j in alpha_idx) {
   acf(
     post$post_alpha[, j],
-    main = paste0("ACF of alpha_", j),
+    main = bquote("ACF of " ~ alpha[.(j)]),
     xlab = "Lag"
   )
 }
 
 par(mfrow = c(1, 1))
 
-# ACF of representative alphas
+# ACF of representative betas
 par(mfrow = c(1, 3), mar = c(4, 4, 4, 1))
 
-for (j in alpha_idx) {
+for (j in beta_idx) {
   acf(
-    post$post_alpha[, j],
-    main = paste0("ACF of alpha_", j),
+    post$post_beta[, j],
+    main = bquote("ACF of " ~ beta[.(j - 1)]),
     xlab = "Lag"
   )
 }
 
 par(mfrow = c(1, 1))
 ```
+
 ## ACF post burn-in (sigma and tau)
 ```{r post-burnin-acf, fig.width=8, fig.height=4}
 save_base_plot("acf_postburn.pdf", 7, 3.5)
@@ -939,6 +943,8 @@ run_one_spec <- function(c_prior, A_tau, b_sigma,
 ## One-at-a-time sensitivity analysis
 
 ```{r sensitivity-runs}
+post <- readRDS("../paper/figures/post_samples.rds")
+
 baseline_row <- data.frame(
   scenario = "Baseline",
   c_prior = 100,
@@ -950,20 +956,26 @@ baseline_row <- data.frame(
   tau_accept_post = post$accept_rate_tau
 )
 
+```
+
+```{r}
+library(dplyr)
+
+
 sensitivity_results <- bind_rows(
   baseline_row,
-  run_one_spec(10,   5, 0.5, scenario = "Smaller prior variance for beta"),
-  run_one_spec(1000, 5, 0.5, scenario = "Larger prior variance for beta"),
-  run_one_spec(100, 2.5, 0.5, scenario = "Smaller A_tau"),
-  run_one_spec(100, 10, 0.5, scenario = "Larger A_tau"),
-  run_one_spec(100, 5, 1, scenario = "Larger b_sigma")
+  run_one_spec(10,   5, 0.5, scenario = "Smaller prior variance for $\\beta$"),
+  run_one_spec(1000, 5, 0.5, scenario = "Larger prior variance for $\\beta$"),
+  run_one_spec(100, 2.5, 0.5, scenario = "Smaller $A_{\\tau}$"),
+  run_one_spec(100, 10, 0.5, scenario = "Larger $A_{\\tau}$"),
+  run_one_spec(100, 5, 1, scenario = "Larger $b_{\\sigma}$")
 )
 
 sensitivity_results
 
 saveRDS(sensitivity_results, file = file.path(fig_dir, "sensitivity_results.rds"))
-
 ```
+
 
 ```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
 library(dplyr)
@@ -971,6 +983,15 @@ library(knitr)
 
 sensitivity_results %>%
   mutate(
+    scenario = recode(
+      scenario,
+      "Baseline" = "Baseline",
+      "Smaller prior variance for beta" = "Smaller prior variance for $\\beta$",
+      "Larger prior variance for beta" = "Larger prior variance for $\\beta$",
+      "Smaller A_tau" = "Smaller $A_{\\tau}$",
+      "Larger A_tau" = "Larger $A_{\\tau}$",
+      "Larger b_sigma" = "Larger $b_{\\sigma}$"
+    ),
     beta_intercept_mean = round(beta_intercept_mean, 3),
     sigma2_mean = round(sigma2_mean, 3),
     tau_mean = round(tau_mean, 3),
@@ -984,7 +1005,7 @@ sensitivity_results %>%
     `$c$` = c_prior,
     `$A_{\\tau}$` = A_tau,
     `$b_{\\sigma}$` = b_sigma,
-    `$(\\beta_0)$` = beta_intercept_mean,
+    `$\\beta_0$` = beta_intercept_mean,
     `$\\sigma^2$` = sigma2_mean,
     `$\\tau$` = tau_mean,
     `Acceptance ($\\tau$)` = tau_accept_post
@@ -992,7 +1013,7 @@ sensitivity_results %>%
   kable(
     format = "latex",
     booktabs = TRUE,
-    escape = FALSE,   
+    escape = FALSE,
     caption = "(\\#tab:sensitivity) Sensitivity analysis under alternative prior specifications.",
     align = "lccccccc"
   )
