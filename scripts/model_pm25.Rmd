@@ -525,7 +525,6 @@ run_mwg_sampler <- function(y_tilde, X, station_index, n_j,
   if (any(is.na(station_index))) stop("station_index contains NA")
   if (min(station_index) < 1) stop("station_index contains values < 1")
   if (max(station_index) > J) stop("station_index exceeds number of groups")
-  if (burn_in >= n_iter) stop("burn_in must be smaller than n_iter")
 
   # Storage
   beta_store <- matrix(NA_real_, nrow = n_iter, ncol = p)
@@ -753,6 +752,8 @@ burn_in <- 200
 
 post <- post_process_mcmc(mcmc_fit, burn_in = burn_in, thin = 5)
 
+saveRDS(post, file = file.path(fig_dir, "post_samples.rds"))
+
 post$accept_rate_tau
 ```
 
@@ -844,6 +845,18 @@ sigma2_summary
 tau_summary
 ```
 Inspection of the trace plots suggested only a short transient phase, so the first 200 iterations were discarded as burn-in. Residual autocorrelation remained for some parameters, especially the intercept and selected random effects; therefore, a mild thinning scheme (every 5th draw) was applied. The retained chains appeared stable, and the acceptance rate for the Metropolis-Hastings update of $\tau$ was satisfactory.
+
+## HDI
+
+```{r}
+library(coda)
+beta_hpd <- HPDinterval(mcmc_beta, prob = 0.95)
+sigma2_hpd <- HPDinterval(mcmc_sigma2, prob = 0.95)
+tau_hpd    <- HPDinterval(mcmc_tau, prob = 0.95)
+```
+```{r}
+HPDinterval(mcmc_beta)
+```
 
 
 # Sensitivity analysis
@@ -1116,12 +1129,16 @@ p_map_alpha <- ggplot() +
     aes(x = Longitude, y = Latitude, color = alpha_mean),
     size = 2.2, alpha = 0.9
   ) +
+  # LINEE MACRO-AREA
+  geom_hline(yintercept = 44, linetype = "dashed", color = "black", linewidth = 0.4) +
+  geom_hline(yintercept = 41.5, linetype = "dashed", color = "black", linewidth = 0.4) +
   coord_quickmap(xlim = c(6, 19), ylim = c(36, 47.5)) +
   labs(
     x = "Longitude",
     y = "Latitude",
     color = expression(hat(alpha)[j])
   ) +
+  
   theme_minimal()
 
 filepath <- file.path(fig_dir, "station_random_effects_map.pdf")
@@ -1171,8 +1188,50 @@ south_draws  <- rowMeans(post$post_alpha[, south_idx, drop = FALSE])
 diff_nc <- north_draws - center_draws
 diff_ns <- north_draws - south_draws
 
-posterior_summary(diff_ns)
 mean(diff_ns > 0)
+```
+
+
+```{r}
+library(coda)
+library(dplyr)
+library(tibble)
+
+area_draws <- list(
+  North = north_draws,
+  Center = center_draws,
+  South = south_draws,
+  `North - South` = diff_ns,
+  `North - Center` = diff_nc
+)
+
+spatial_table <- lapply(names(area_draws), function(x) {
+  draws <- area_draws[[x]]
+  hpd <- HPDinterval(as.mcmc(draws), prob = 0.95)
+  
+  tibble(
+    Area = x,
+    Mean = mean(draws),
+    `95% HPD lower` = hpd[1, "lower"],
+    `95% HPD upper` = hpd[1, "upper"],
+    `Posterior probability` = mean(draws > 0)
+  )
+}) %>%
+  bind_rows() %>%
+  dplyr::mutate(
+    Mean = round(Mean, 3),
+    `95% HPD interval` = paste0(
+      "[", round(`95% HPD lower`, 3),
+      ", ", round(`95% HPD upper`, 3), "]"
+    ),
+    `Pr(>0)` = round(`Pr(>0)`, 3)
+  ) %>%
+  dplyr::select(Area, Mean, `95% HPD interval`, `Pr(>0)`)
+
+spatial_table
+```
+```{r}
+saveRDS(spatial_table, file = file.path(fig_dir, "spatial_macroarea_table.rds"))
 ```
 
 
