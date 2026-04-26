@@ -83,7 +83,7 @@ $$
 X = \texttt{model.matrix}(\sim \text{month} + \text{day\_of\_week}),
 $$
 
-so that the intercept is included by default together with monthly and day-of-week indicators. Station-level heterogeneity is not included among the fixed effects, but is instead modeled through station-specific random intercepts.
+so that the intercept is included by default together with monthly and day-of-week indicators. The resulting parametrization corresponds to a treatment coding scheme, in which the intercept represents the expected log PM$_{2.5}$ level for the reference categories (January and Monday), and the remaining coefficients measure deviations from these baselines. Station-level heterogeneity is not included among the fixed effects, but is instead modeled through station-specific random intercepts.
 
 The likelihood is specified as:
 
@@ -96,7 +96,7 @@ $$
 where:
 
 - \( x_i \) is the \( i \)-th row of the design matrix \( X \),
-- \( \beta \) is a vector of regression coefficients capturing systematic temporal variation,
+- \( \beta \) is a vector of fixed-effect coefficients associated with the intercept, month indicators, and day-of-week indicators,
 - \( \alpha_{j[i]} \) is a station-specific random intercept accounting for time-invariant local characteristics.
 
 ## Hierarchical structure
@@ -173,7 +173,7 @@ library(knitr)
 sensitivity_results <- readRDS("figures/sensitivity_results.rds")
 
 tab_sensitivity <- data.frame(
-  Scenario = gsub("_", " ", sensitivity_results$scenario),  # evita errore LaTeX
+  Scenario = gsub("_", " ", sensitivity_results$scenario),  #
   "$c$" = round(sensitivity_results$c_prior, 3),
   "$A_{\\tau}$" = round(sensitivity_results$A_tau, 3),
   "$b_{\\sigma}$" = round(sensitivity_results$b_sigma, 3),
@@ -204,45 +204,53 @@ Overall, the sensitivity analysis indicates that posterior inference is not mate
 
 ## Convergence diagnostics
 
-Trace plots of the post-burn-in chains (Figure \@ref(fig:fig-trace)) show no evidence of non-stationarity or systematic trends. The chains fluctuate around stable levels, indicating satisfactory convergence of the Metropolis-within-Gibbs sampler.
+Trace plots of the post-burn-in chains for the variance components (Figure \@ref(fig:fig-trace)) show no evidence of non-stationarity or systematic trends. Both chains fluctuate around stable levels, indicating satisfactory convergence of the Metropolis-within-Gibbs sampler.
 
-```{r fig-trace, echo=FALSE, fig.cap="Post-burn-in trace plots for selected model parameters.", fig.width=7, fig.height=5}
+```{r fig-trace, echo=FALSE, fig.cap="Post-burn-in trace plots for the variance components.", fig.width=7, fig.height=5}
 knitr::include_graphics("figures/trace_postburn.pdf")
 ```
 
-Residual autocorrelation is illustrated in Figure \@ref(fig:fig-acf). While mild dependence persists for some parameters, it remains limited and does not compromise inference.
+\FloatBarrier
 
-```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for selected model parameters.", fig.width=7, fig.height=5}
+Autocorrelation functions for the variance components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero for subsequent lags, suggesting satisfactory mixing.
+
+```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance components.", fig.width=7, fig.height=3.5}
 knitr::include_graphics("figures/acf_postburn.pdf")
 ```
 
 \FloatBarrier
 
-The Geweke diagnostic supports convergence, with all reported $z$-scores lying well within the conventional acceptance interval $[-2,2]$ (see Table \@ref(tab:tab-diagnostics)). For the global parameters, the values are $0.224$ for $\beta_1$, $-0.761$ for $\beta_2$, $-0.649$ for $\sigma^2$, and $-0.200$ for $\tau$. Representative station-level effects also yield $z$-scores close to zero (e.g., $0.111$, $-0.031$, and $0.063$ for $\alpha_1$, $\alpha_{58}$, and $\alpha_{116}$, respectively), providing no evidence against convergence.
+Autocorrelation functions were also inspected for representative regression coefficients and station-specific effects, selected based on their effective sample size to capture parameters with low, median, and high mixing efficiency. While some persistence is observed at low lags for a subset of parameters, particularly among station effects, autocorrelation decays steadily and remains within acceptable bounds. This pattern is consistent with the effective sample size results, which indicate some heterogeneity in mixing across parameters but no evidence of pathological behavior.
 
-Effective sample sizes indicate satisfactory overall efficiency, although mixing is not uniform across parameter blocks. In particular, $\beta_2$ and $\tau$ achieve ESS values close to the total number of retained draws (both around $960$), while $\sigma^2$ also shows a high ESS (approximately $743$). The ESS for $\beta_1$ is lower (about $178$), suggesting comparatively stronger autocorrelation for this parameter. The station-specific effects exhibit more heterogeneous ESS values, generally lower than those of the global parameters but still within an acceptable range (roughly between $65$ and $300$). Overall, these results indicate that the sampler mixes satisfactorily and provides a sufficient effective sample size for reliable posterior inference.
+The Geweke diagnostic further supports convergence. Instead of reporting individual diagnostics for each regression coefficient and station effect, Table \@ref(tab:tab-geweke) summarizes the Geweke $z$-scores by parameter block. All reported values lie within the conventional acceptance interval $[-2,2]$, providing no evidence against convergence.
 
-```{r tab-diagnostics, echo=FALSE, warning=FALSE}
+For the regression coefficients, the Geweke $z$-scores range from $-1.731$ to $0.223$, with an average value of $-0.671$. Similarly, for the station-specific effects, the values range from $-0.777$ to $1.166$, with an average value of $-0.037$. These results indicate no systematic deviation from stationarity across either block.
+
+The variance components show $z$-scores close to zero, equal to $-0.649$ for $\sigma^2$ and $-0.200$ for $\tau$, further supporting convergence of the global parameters.
+
+
+```{r tab-geweke, echo=FALSE, warning=FALSE, message=FALSE}
 library(knitr)
+library(dplyr)
 
-diagnostics_table <- data.frame(
-  Parameter = c("$\\beta_1$", "$\\beta_2$", "$\\sigma^2$", "$\\tau$"),
-  `Geweke z-score` = c(0.224, -0.761, -0.649, -0.200),
-  ESS = c(178.4, 960.0, 742.995, 960.0)
-)
+geweke_summary <- readRDS(file.path("figures/geweke_summary.rds"))
 
-kable(
-  diagnostics_table,
-  format = "latex",
-  booktabs = TRUE,
-  caption = "Convergence diagnostics and effective sample sizes for key parameters",
-  escape = FALSE,
-  table.envir = "table",
-  position = "H"
-)
+geweke_summary %>%
+  rename(
+    `Parameter block` = Parameter_block
+  ) %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,
+    caption = "(\\#tab:geweke) Summary of Geweke diagnostic z-scores by parameter block.",
+    align = "lccc"
+  )
 ```
 
 \FloatBarrier
+
+Overall, the trace plots, autocorrelation functions, and Geweke diagnostics consistently indicate that the sampler mixes satisfactorily and provides reliable posterior draws for subsequent inference.
 
 ## Posterior inference
 
