@@ -34,7 +34,7 @@ A key challenge in modeling $\text{PM}_{2.5}$ concentrations lies in the presenc
 
 In this context, Bayesian hierarchical models provide a natural and flexible framework to address these challenges. By introducing station-specific effects, they allow persistent differences across monitoring sites to be explicitly modeled, while still leveraging information from the entire dataset. This is particularly useful when some stations have limited observations, as it avoids relying exclusively on sparse local data and allows inference to be stabilized through partial pooling.
 
-Building on these considerations, this paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy. Because the model includes a non-conjugate variance component, posterior inference is carried out using a Metropolis-within-Gibbs sampler, combining conjugate Gibbs updates with a Metropolis-Hastings step. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
+Building on these considerations, this paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy. Because the model includes a non-conjugate scale component, posterior inference is carried out using a Metropolis-within-Gibbs sampler, combining conjugate Gibbs updates with a Metropolis-Hastings step. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
 
 # Data
 
@@ -90,6 +90,13 @@ $$
 
 where \(i\) indexes monitoring stations, \(t\) indexes the observation date, and \(x_{it}\) denotes the corresponding row of the fixed-effects design matrix \(X\). The coefficient vector \(\beta\) captures the calendar fixed effects, while \(\alpha_i\) is a station-specific random intercept accounting for time-invariant local characteristics.
 
+Equivalently, the model can be written as
+
+$$
+y_{it} = x_{it}^\top \beta + \alpha_i + \varepsilon_{it}, 
+\quad \text{with } \varepsilon_{it} \sim \mathcal{N}(0, \sigma^2).
+$$
+
 ## Hierarchical structure
 
 Station-specific effects are modeled as draws from a common Gaussian population distribution:
@@ -100,7 +107,7 @@ $$
 
 where \(J\) is the number of monitoring stations and \(\tau^2\) captures the cross-station variability in baseline pollution levels.
 
-The assumption of a common Gaussian distribution reflects the idea that monitoring stations are exchangeable draws from a broader population of locations, once observed covariates are accounted for. This formulation allows the model to decompose variation in pollution levels into a systematic component (captured by \( x_i^\top \beta \)) and an unobserved station-specific component.
+The assumption of a common Gaussian distribution reflects the idea that monitoring stations are exchangeable draws from a broader population of locations, once observed covariates are accounted for. This formulation allows the model to decompose variation in pollution levels into a systematic component (captured by \( x_{it}^\top \beta \)) and an unobserved station-specific component.
 
 The hierarchical structure induces partial pooling: stations with limited observations are shrunk toward the overall mean, while stations with richer data retain more idiosyncratic estimates. This feature is particularly important in the present setting, where the panel is highly unbalanced and some stations provide only sparse temporal coverage. Shrinkage improves estimation stability and prevents overfitting to noisy local patterns.
 
@@ -114,7 +121,7 @@ $$
 \beta \sim \mathcal{N}(b_0, B_0),
 $$
 
-where \( B_0 = cI \) is a diagonal covariance matrix. This specification assumes prior independence across coefficients and imposes mild shrinkage toward zero, helping to stabilize estimation in the presence of potentially correlated temporal indicators.
+where \( B_0 = c I_p \) is a diagonal covariance matrix. This specification assumes prior independence across coefficients and imposes mild shrinkage toward zero, helping to stabilize estimation in the presence of potentially correlated temporal indicators.
 
 The observation variance is assigned the prior
 
@@ -127,7 +134,7 @@ which provides a conjugate prior facilitating posterior computation while remain
 For the group-level standard deviation:
 
 $$
-\tau \sim \text{Half-Cauchy}(0, A).
+\tau \sim \text{Half-Cauchy}(0, A_\tau).
 $$
 
 The use of a half-Cauchy prior for \( \tau \) avoids the well-known sensitivity of inverse-gamma priors for variance components, while providing weakly informative regularization.
@@ -151,12 +158,10 @@ p(\beta, \alpha, \sigma^2, \tau \mid y)
 \cdot
 \text{IG}(\sigma^2 \mid a_\sigma, b_\sigma)
 \cdot
-\pi(\tau),
+\pi(\tau).
 $$
 
-where \(\pi(\tau)\) denotes the half-Cauchy prior density.
-
-Although the joint posterior does not admit a closed-form expression, most full conditional distributions are available in standard form.
+Although the joint posterior does not admit a closed-form expression, most full conditional distributions are available in standard form, while the scale parameter \(\tau\) does not admit a conjugate full conditional distribution under the half-Cauchy prior and therefore requires a non-standard update.
 
 In particular, conditional on \(\sigma^2\) and \(\tau\), the regression coefficients \(\beta\) follow a multivariate normal distribution:
 
@@ -164,7 +169,7 @@ $$
 \beta \mid \cdot \sim \mathcal{N}(\tilde{b}, \tilde{B}),
 $$
 
-where the posterior covariance matrix and mean are given by
+where the posterior mean and covariance matrix are given by
 
 $$
 \tilde{B} = \left( B_0^{-1} + \frac{1}{\sigma^2} X^\top X \right)^{-1},
@@ -201,28 +206,41 @@ where
 $$
 \tilde{a}_\sigma = a_\sigma + \frac{N}{2},
 \qquad
-\tilde{b}_\sigma = b_\sigma + \frac{1}{2} \sum_{i,t} (y_{it} - x_{it}^\top \beta - \alpha_i)^2.
+\tilde{b}_\sigma = b_\sigma + \frac{1}{2} \sum_{i,t} (y_{it} - x_{it}^\top \beta - \alpha_i)^2,
 $$
 
-In contrast, the full conditional distribution of \(\tau\) does not belong to a standard family due to the half-Cauchy prior. As a result, this parameter is updated via a Metropolis-Hastings step within the Gibbs sampler.
+and \(N\) denotes the total number of observations.
+
+In contrast, the full conditional distribution of \(\tau\) does not belong to a standard family due to the half-Cauchy prior. Its conditional density is proportional to
+
+$$
+p(\tau \mid \alpha) \propto 
+\left[
+\prod_{i=1}^J \mathcal{N}(\alpha_i \mid 0, \tau^2)
+\right]
+\pi(\tau),
+\qquad \tau > 0,
+$$
+
+and is therefore updated via a Metropolis-Hastings step within the Gibbs sampler.
 
 These conditional distributions directly motivate the Metropolis-within-Gibbs algorithm described in the next section.
 
 ## MCMC estimation
 
-Posterior inference is performed via a Metropolis-within-Gibbs sampler. Conditional on the variance components \(\sigma^2\) and \(\tau\), the regression coefficients $\beta$ and the vector of station-specific effects \( \alpha = (\alpha_1, \dots, \alpha_J) \) admit Gaussian full conditional distributions and are therefore updated through Gibbs steps. The observation variance $\sigma^2$ is sampled from its inverse-gamma full conditional distribution.
+Posterior inference is performed via a Metropolis-within-Gibbs sampler. Conditional on the variance and scale components \(\sigma^2\) and \(\tau\), the regression coefficients $\beta$ and the vector of station-specific effects \( \alpha = (\alpha_1, \dots, \alpha_J) \) admit Gaussian full conditional distributions and are therefore updated through Gibbs steps. The observation variance $\sigma^2$ is sampled from its inverse-gamma full conditional distribution.
 
-The group-level scale parameter $\tau$, for which no closed-form full conditional is available under the half-Cauchy prior, is updated through a random-walk Metropolis step. This hybrid scheme combines the computational convenience of conjugate updates with the flexibility required for the non-conjugate variance component.
+The group-level scale parameter $\tau$, for which no closed-form full conditional is available under the half-Cauchy prior, is updated through a random-walk Metropolis step. This hybrid scheme combines the computational convenience of conjugate updates with the flexibility required for the non-conjugate scale component.
 
 The algorithm therefore alternates between Gibbs updates for $\beta$, $\alpha$, and $\sigma^2$, and a Metropolis-Hastings update for $\tau$.
 
 ## Implementation details
 
-Hyperparameters are selected to induce weakly informative priors. For the regression coefficients, the prior covariance matrix is set to $B_0 = cI$, with baseline choice $c = 100$, implying a large prior variance and only mild shrinkage toward zero. For the observation variance, the inverse-gamma hyperparameters are fixed at $a_\sigma = 2$ and $b_\sigma = 0.5$, yielding a diffuse prior. The value $b_\sigma = 0.5$ is chosen to be consistent with the empirical scale of the log-transformed outcome (whose sample variance is approximately $0.47$), while remaining sufficiently weakly informative. The scale parameter of the half-Cauchy prior on $\tau$ is set to $A = 5$, allowing for substantial between-station variability while still providing regularization. The robustness of posterior inference to alternative hyperparameter choices is examined through a dedicated sensitivity analysis reported below.
+Hyperparameters are selected to induce weakly informative priors. For the regression coefficients, the prior covariance matrix is set to $B_0 = c I_p$, with baseline choice $c = 100$, implying a large prior variance and only mild shrinkage toward zero. For the observation variance, the inverse-gamma hyperparameters are fixed at $a_\sigma = 2$ and $b_\sigma = 0.5$, yielding a diffuse prior. The value $b_\sigma = 0.5$ is chosen to be consistent with the empirical scale of the log-transformed outcome (whose sample variance is approximately $0.47$), while remaining sufficiently weakly informative. The scale parameter of the half-Cauchy prior on $\tau$ is set to $A_\tau = 5$, allowing for substantial between-station variability while still providing regularization. The robustness of posterior inference to alternative hyperparameter choices is examined through a dedicated sensitivity analysis reported below.
 
-Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 10,000 iterations. Burn-in and thinning are applied as post-processing steps: the first 2,000 iterations are discarded and every 5th remaining draw is retained.
+Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 10,000 iterations. Burn-in and thinning are applied as post-processing steps: the first 2,000 iterations are discarded and every 5th remaining draw is retained to reduce storage and autocorrelation.
 
-The Metropolis step for $\tau$ is implemented as a Gaussian random walk on the log scale. After tuning, a proposal standard deviation of 0.20 is adopted, yielding an acceptance rate of approximately 0.37. Posterior summaries and diagnostic plots are essentially unaffected by alternative choices, so this specification is retained for the final MCMC run.
+The Metropolis step for $\tau$ is implemented as a Gaussian random walk proposal on \(\log \tau\). After tuning, a proposal standard deviation of 0.20 is adopted, yielding an acceptance rate of approximately 0.37. Posterior summaries and diagnostic plots are essentially unaffected by alternative choices, so this specification is retained for the final MCMC run.
 
 Finally, convergence is assessed using both graphical (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic and the effective sample size.
 
@@ -272,23 +290,23 @@ kable(
 
 \FloatBarrier
 
-Overall, the sensitivity analysis indicates that posterior inference is not materially driven by the specific prior calibration. Instead, the likelihood appears sufficiently informative for the parameters of interest.
+Overall, the sensitivity analysis indicates that posterior inference is not materially driven by the specific prior calibration. Instead, the likelihood appears sufficiently informative relative to the prior.
 
 # Results
 
 ## Convergence diagnostics
 
-Trace plots of the post-burn-in chains for the variance components (Figure \@ref(fig:fig-trace)) show no evidence of non-stationarity or systematic trends. Both chains fluctuate around stable levels, indicating satisfactory convergence of the Metropolis-within-Gibbs sampler.
+Trace plots of the post-burn-in chains for the variance and scale components (Figure \@ref(fig:fig-trace)) show no evidence of non-stationarity or systematic trends. Both chains fluctuate around stable levels, indicating satisfactory convergence of the Metropolis-within-Gibbs sampler.
 
-```{r fig-trace, echo=FALSE, fig.cap="Post-burn-in trace plots for the variance components.", fig.width=7, fig.height=5}
+```{r fig-trace, echo=FALSE, fig.cap="Post-burn-in trace plots for the variance and scale components.", fig.width=7, fig.height=5}
 knitr::include_graphics("figures/trace_postburn.pdf")
 ```
 
 \FloatBarrier
 
-Autocorrelation functions for the variance components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero for subsequent lags, suggesting satisfactory mixing.
+Autocorrelation functions for the variance and scale components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero for subsequent lags, suggesting satisfactory mixing.
 
-```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance components.", fig.width=7, fig.height=3.5}
+```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance and scale components.", fig.width=7, fig.height=3.5}
 knitr::include_graphics("figures/acf_postburn.pdf")
 ```
 
