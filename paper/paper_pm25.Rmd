@@ -28,13 +28,13 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-Air pollution represents a major environmental and public health concern. Specifically, fine particulate matter $\text{PM}_{2.5}$ is among the most harmful pollutants due to its ability to penetrate deep into the respiratory system and its strong association with cardiovascular and pulmonary diseases.
+Air pollution represents a major environmental and public health concern. Specifically, fine particulate matter $\text{PM}_{2.5}$ is among the most harmful pollutants due to its ability to penetrate deep into the respiratory system and its strong association with cardiovascular and pulmonary diseases. Reliable statistical modeling of $\text{PM}_{2.5}$ concentrations is therefore important for understanding pollution patterns and for assessing the persistence of environmental exposure across different locations.
 
-A key challenge in modeling $\text{PM}_{2.5}$ concentrations lies in the presence of substantial heterogeneity across monitoring stations and irregular temporal coverage. Stations differ significantly in terms of geographical characteristics, local emission sources, and environmental conditions, while observational data often exhibit an unbalanced panel structure, with varying numbers of observations across stations and missing time periods.
+A key challenge in modeling $\text{PM}_{2.5}$ concentrations lies in the presence of substantial heterogeneity across monitoring stations and irregular temporal coverage. Stations differ significantly in terms of geographical characteristics, local emission sources, and environmental conditions, while observational data often exhibit an unbalanced panel structure, with varying numbers of observations across stations and missing time periods. As a result, direct comparisons across stations may be misleading, since observed differences can reflect both genuine site-specific pollution patterns and differences in the amount and timing of available data.
 
-In this context, Bayesian hierarchical models provide a natural and flexible framework to account for these complexities. By introducing group-level random effects, these models allow for partial pooling, enabling information sharing across stations while preserving local heterogeneity. Moreover, the Bayesian approach provides a coherent framework for uncertainty quantification and prior specification.
+In this context, Bayesian hierarchical models provide a natural and flexible framework to address these challenges. By introducing station-specific effects, they allow persistent differences across monitoring sites to be explicitly modeled, while still leveraging information from the entire dataset. This is particularly useful when some stations have limited observations, as it avoids relying exclusively on sparse local data and allows inference to be stabilized through partial pooling.
 
-This paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy. Posterior inference is carried out using a Metropolis-within-Gibbs sampler. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
+Building on these considerations, this paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy. Because the model includes a non-conjugate variance component, posterior inference is carried out using a Metropolis-within-Gibbs sampler, combining conjugate Gibbs updates with a Metropolis-Hastings step. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
 
 # Data
 
@@ -141,7 +141,7 @@ $$
 
 The use of a half-Cauchy prior for \( \tau \) avoids the well-known sensitivity of inverse-gamma priors for variance components, while providing weakly informative regularization.
 
-## Posterior inference
+## MCMC estimation
 
 Posterior inference is performed via a Metropolis-within-Gibbs sampler. Conditional on the variance components, the regression coefficients $\beta$ and the station-specific effects $\alpha$ admit Gaussian full conditional distributions and are therefore updated through Gibbs steps. The observation variance $\sigma^2$ is sampled from its inverse-gamma full conditional distribution.
 
