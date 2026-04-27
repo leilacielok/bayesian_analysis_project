@@ -38,14 +38,15 @@ Building on these considerations, this paper develops a Bayesian hierarchical mo
 
 # Data
 
-The dataset comprises daily $\text{PM}_{2.5}$ concentration measurements collected across monitoring stations in Italy during 2025. The raw data were sourced from the European Environment Agency (EEA) Air Quality portal, specifically via the EEA Air Quality e-Reporting, with metadata and station specifications validated through the EEA Air Quality Viewer.^[EEA Air Quality e-Reporting: <https://eeadmz1-downloads-webapp.azurewebsites.net/>. EEA Air Quality Viewer: <https://discomap.eea.europa.eu/App/AQViewer/index.html?fqn=Airquality_Dissem.b2g.measurements>.] After preprocessing and quality control, the final dataset contains 31,349 observations distributed across 116 stations.
+The dataset comprises daily $\text{PM}_{2.5}$ concentration measurements collected across monitoring stations in Italy during 2025. The raw data were sourced from the European Environment Agency (EEA) Air Quality portal, specifically via the EEA Air Quality e-Reporting, with metadata and station specifications validated through the EEA Air Quality Viewer.^[EEA Air Quality e-Reporting: <https://eeadmz1-downloads-webapp.azurewebsites.net/>. EEA Air Quality Viewer: <https://discomap.eea.europa.eu/App/AQViewer/index.html?fqn=Airquality_Dissem.b2g.measurements>.] After preprocessing and quality control, the final dataset contains 31,349 observations distributed across 116 stations. Since the subsequent model is specified for a continuous, approximately Gaussian outcome, the distributional properties of $\text{PM}_{2.5}$ concentrations were inspected before estimation.
 
-The empirical distribution of the raw outcome variable is highly right-skewed, with a skewness of approximately 17.1. This strong asymmetry is primarily driven by extreme pollution events in the upper tail. To stabilize the variance and satisfy the distributional assumptions of the proposed model, a logarithmic transformation was applied. This transformation substantially reduces skewness (to approximately -0.29), yielding a more symmetric distribution (visible in Figure \@ref(fig:fig-outcome)) and making the Gaussian likelihood a reasonable modeling choice. 
+The empirical distribution of the raw outcome variable was highly right-skewed, with a skewness of approximately 17.1, primarily driven by extreme pollution events in the upper tail. Therefore, to stabilize variance and improve compatibility with the Gaussian likelihood of the proposed model, the outcome variable was transformed as
 
 $$
-y_{it} = \log(\text{PM}_{2.5,it})
+y_{it} = \log(\text{PM}_{2.5,it}),
 $$
-where $y_{it}$ represents the transformed concentration for station $i$ at time $t$. In what follows, each observation will be indexed by a single index \(i\), with the mapping between observations and station-time pairs left implicit. 
+
+where $y_{it}$ represents the transformed concentration for station $i$ at time $t$. This transformation substantially reduced skewness to approximately -0.29, yielding a more symmetric distribution, as shown in Figure \@ref(fig:fig-outcome), and making the likelihood specification a reasonable modeling choice.
 
 ```{r fig-outcome, echo=FALSE, fig.cap="Distribution of the log-transformed PM2.5 concentrations.", fig.align='center'}
 knitr::include_graphics("figures/hist_log_pm25.pdf")
@@ -53,8 +54,7 @@ knitr::include_graphics("figures/hist_log_pm25.pdf")
 
 \FloatBarrier 
 
-
-The panel structure is markedly unbalanced, a common feature in environmental monitoring networks. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Temporal coverage is also uneven across stations. While most stations provide observations for most of the year, 32 stations lack at least one full month of data, and for a few stations coverage drops to only 4 months. This heterogeneity is summarized in Figure \@ref(fig:fig-availability), which reports both the distribution of the number of observations per station and the distribution of the number of months observed per station. Such an irregular structure poses a challenge for standard time-series methods.
+As is often the case in environmental monitoring networks, the resulting panel is markedly unbalanced. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Temporal coverage is also uneven across stations. While most stations provide observations for most of the year, 32 stations lack at least one full month of data, and for a few stations coverage drops to only 4 months. This heterogeneity is summarized in Figure \@ref(fig:fig-availability), which reports both the distribution of the number of observations per station and the distribution of the number of months observed per station. 
 
 ```{r fig-availability, echo=FALSE, out.width="80%", fig.cap="Data availability by station.", fig.align='center'}
 knitr::include_graphics("figures/panel_structure_summary.pdf")
@@ -63,9 +63,6 @@ knitr::include_graphics("figures/panel_structure_summary.pdf")
 \FloatBarrier
 
 For the estimation of the Bayesian hierarchical model, only a restricted set of variables was retained from the cleaned dataset. The modelling dataset includes the log-transformed outcome variable, the station identifier, the month, and the day of the week. Observations with missing values in any of these variables were excluded from the modelling dataset, resulting in a complete-case sample. The variables `station_id`, `month`, and `day_of_week` were then treated as categorical factors.
-
-Formally, the model is estimated on a dataset consisting of the variables $\{y_{it}, \text{station}_i, \text{month}_t, \text{day\_of\_week}_t\}$.
-
 The corresponding design matrix includes an intercept, monthly indicators, and day-of-week indicators, while the station identifier is used to define the hierarchical grouping structure.
 
 
@@ -74,8 +71,6 @@ The corresponding design matrix includes an intercept, monthly indicators, and d
 The hierarchical nature of the resulting complete-case dataset, together with the strong imbalance in the panel structure, naturally motivates a multilevel modeling approach. In particular, the uneven number of observations across stations and the presence of incomplete temporal coverage make standard time-series or pooled regression models potentially inefficient and biased, as they are unable to properly account for unobserved heterogeneity across monitoring sites.
 
 To address these issues, a Bayesian hierarchical specification is adopted, which allows for partial pooling across stations. This framework enables the model to borrow strength from the entire dataset while retaining station-specific components, thus providing robust inference even in the presence of sparse observations for some units.
-
-A hierarchical model is considered for the log-transformed $\text{PM}_{2.5}$ concentrations. Let \( y_i \) denote the transformed outcome for observation \( i \). 
 
 The covariates included in the model correspond to calendar effects. In particular, the fixed-effects design matrix is constructed as
 
@@ -88,26 +83,22 @@ so that the intercept is included by default together with monthly and day-of-we
 The likelihood is specified as:
 
 $$
-y_i \mid \beta, \alpha, \sigma^2 
+y_{it} \mid \beta, \alpha, \sigma^2 
 \sim 
-\mathcal{N}(x_i^\top \beta + \alpha_{j[i]}, \sigma^2)
+\mathcal{N}(x_{it}^\top \beta + \alpha_i, \sigma^2),
 $$
 
-where:
-
-- \( x_i \) is the \( i \)-th row of the design matrix \( X \),
-- \( \beta \) is a vector of fixed-effect coefficients associated with the intercept, month indicators, and day-of-week indicators,
-- \( \alpha_{j[i]} \) is a station-specific random intercept accounting for time-invariant local characteristics.
+where \(i\) indexes monitoring stations, \(t\) indexes the observation date, and \(x_{it}\) denotes the corresponding row of the fixed-effects design matrix \(X\). The coefficient vector \(\beta\) captures the calendar fixed effects, while \(\alpha_i\) is a station-specific random intercept accounting for time-invariant local characteristics.
 
 ## Hierarchical structure
 
 Station-specific effects are modeled as draws from a common Gaussian population distribution:
 
 $$
-\alpha_j \mid \tau \sim \mathcal{N}(0, \tau^2), \quad j = 1, \dots, J,
+\alpha_i \mid \tau \sim \mathcal{N}(0, \tau^2), \quad i = 1, \dots, J,
 $$
 
-where \( \tau^2 \) captures the cross-station variability in baseline pollution levels.
+where \(J\) is the number of monitoring stations and \(\tau^2\) captures the cross-station variability in baseline pollution levels.
 
 The assumption of a common Gaussian distribution reflects the idea that monitoring stations are exchangeable draws from a broader population of locations, once observed covariates are accounted for. This formulation allows the model to decompose variation in pollution levels into a systematic component (captured by \( x_i^\top \beta \)) and an unobserved station-specific component.
 
@@ -123,7 +114,7 @@ $$
 \beta \sim \mathcal{N}(b_0, B_0),
 $$
 
-where \( B_0 = cI \) is a diagonal covariance matrix. This specification reflects prior independence across coefficients and imposes mild shrinkage toward zero, helping to stabilize estimation in the presence of potentially correlated temporal indicators.
+where \( B_0 = cI \) is a diagonal covariance matrix. This specification assumes prior independence across coefficients and imposes mild shrinkage toward zero, helping to stabilize estimation in the presence of potentially correlated temporal indicators.
 
 The observation variance is assigned the prior
 
@@ -131,7 +122,7 @@ $$
 \sigma^2 \sim \text{Inverse-Gamma}(a_\sigma, b_\sigma),
 $$
 
-which provides a conjugate prior facilitating posterior computation while remaining weakly informative for suitably chosen hyperparameters.
+which provides a conjugate prior facilitating posterior computation while remaining weakly informative for appropriate choices of hyperparameters.
 
 For the group-level standard deviation:
 
@@ -143,7 +134,7 @@ The use of a half-Cauchy prior for \( \tau \) avoids the well-known sensitivity 
 
 ## MCMC estimation
 
-Posterior inference is performed via a Metropolis-within-Gibbs sampler. Conditional on the variance components, the regression coefficients $\beta$ and the station-specific effects $\alpha$ admit Gaussian full conditional distributions and are therefore updated through Gibbs steps. The observation variance $\sigma^2$ is sampled from its inverse-gamma full conditional distribution.
+Posterior inference is performed via a Metropolis-within-Gibbs sampler. Conditional on the variance components \(\sigma^2\) and \(\tau\), the regression coefficients $\beta$ and the vector of station-specific effects \( \alpha = (\alpha_1, \dots, \alpha_J) \) admit Gaussian full conditional distributions and are therefore updated through Gibbs steps. The observation variance $\sigma^2$ is sampled from its inverse-gamma full conditional distribution.
 
 The group-level scale parameter $\tau$, for which no closed-form full conditional is available under the half-Cauchy prior, is updated through a random-walk Metropolis step. This hybrid scheme combines the computational convenience of conjugate updates with the flexibility required for the non-conjugate variance component.
 
