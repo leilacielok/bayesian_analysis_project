@@ -132,6 +132,82 @@ $$
 
 The use of a half-Cauchy prior for \( \tau \) avoids the well-known sensitivity of inverse-gamma priors for variance components, while providing weakly informative regularization.
 
+## Posterior structure and conditional distributions
+
+Combining the likelihood with the prior distributions, the joint posterior density is proportional to
+
+$$
+p(\beta, \alpha, \sigma^2, \tau \mid y)
+\propto
+\left[
+\prod_{i,t}
+\mathcal{N}(y_{it} \mid x_{it}^\top \beta + \alpha_i, \sigma^2)
+\right]
+\left[
+\prod_{i=1}^J
+\mathcal{N}(\alpha_i \mid 0, \tau^2)
+\right]
+\mathcal{N}(\beta \mid b_0, B_0)
+\cdot
+\text{IG}(\sigma^2 \mid a_\sigma, b_\sigma)
+\cdot
+\pi(\tau),
+$$
+
+where \(\pi(\tau)\) denotes the half-Cauchy prior density.
+
+Although the joint posterior does not admit a closed-form expression, most full conditional distributions are available in standard form.
+
+In particular, conditional on \(\sigma^2\) and \(\tau\), the regression coefficients \(\beta\) follow a multivariate normal distribution:
+
+$$
+\beta \mid \cdot \sim \mathcal{N}(\tilde{b}, \tilde{B}),
+$$
+
+where the posterior covariance matrix and mean are given by
+
+$$
+\tilde{B} = \left( B_0^{-1} + \frac{1}{\sigma^2} X^\top X \right)^{-1},
+\qquad
+\tilde{b} = \tilde{B} \left( B_0^{-1} b_0 + \frac{1}{\sigma^2} X^\top (y - \alpha) \right),
+$$
+
+with \(y\) denoting the stacked outcome vector and \(\alpha\) the vector of station-specific effects appropriately expanded to match the observation-level dimension.
+
+Similarly, each station-specific effect admits a Gaussian full conditional:
+
+$$
+\alpha_i \mid \cdot \sim \mathcal{N}(\tilde{a}_i, \tilde{V}_i),
+$$
+
+where
+
+$$
+\tilde{V}_i = \left( \frac{n_i}{\sigma^2} + \frac{1}{\tau^2} \right)^{-1},
+\qquad
+\tilde{a}_i = \tilde{V}_i \cdot \frac{1}{\sigma^2} \sum_{t \in \mathcal{T}_i} (y_{it} - x_{it}^\top \beta),
+$$
+
+with \(n_i\) denoting the number of observations available for station \(i\), and \(\mathcal{T}_i\) the corresponding set of time indices.
+
+The observation variance retains conjugacy and follows an inverse-gamma full conditional:
+
+$$
+\sigma^2 \mid \cdot \sim \text{Inverse-Gamma}(\tilde{a}_\sigma, \tilde{b}_\sigma),
+$$
+
+where
+
+$$
+\tilde{a}_\sigma = a_\sigma + \frac{N}{2},
+\qquad
+\tilde{b}_\sigma = b_\sigma + \frac{1}{2} \sum_{i,t} (y_{it} - x_{it}^\top \beta - \alpha_i)^2.
+$$
+
+In contrast, the full conditional distribution of \(\tau\) does not belong to a standard family due to the half-Cauchy prior. As a result, this parameter is updated via a Metropolis-Hastings step within the Gibbs sampler.
+
+These conditional distributions directly motivate the Metropolis-within-Gibbs algorithm described in the next section.
+
 ## MCMC estimation
 
 Posterior inference is performed via a Metropolis-within-Gibbs sampler. Conditional on the variance components \(\sigma^2\) and \(\tau\), the regression coefficients $\beta$ and the vector of station-specific effects \( \alpha = (\alpha_1, \dots, \alpha_J) \) admit Gaussian full conditional distributions and are therefore updated through Gibbs steps. The observation variance $\sigma^2$ is sampled from its inverse-gamma full conditional distribution.
