@@ -48,7 +48,7 @@ The dataset was filtered to retain valid and verified PM2.5 observations. No mis
 The response variable was log-transformed to reduce skewness:
 
 $$
-y = \log(\text{PM}_{2.5})
+y_{it} = \log(\text{PM}_{2.5})
 $$
 
 Additional temporal covariates were derived from the observation date:
@@ -64,7 +64,7 @@ The resulting panel is unbalanced, with the number of observations per station r
 
 $$
 \begin{aligned}
-y_i &\sim \mathcal{N}(X_i \beta + \alpha_j, \sigma^2) \\
+y_{it} &\sim \mathcal{N}(X_i \beta + \alpha_j, \sigma^2) \\
 \alpha_j &\sim \mathcal{N}(0, \tau^2) \\
 \beta &\sim \mathcal{N}(b_0, B_0) \\
 \sigma^2 &\sim \text{Inverse-Gamma}(a_\sigma, b_\sigma) \\
@@ -79,9 +79,9 @@ $$
 Inference is performed via MCMC sampling using a Metropolis-within-Gibbs algorithm:
 - Gibbs updates for:
   - regression coefficients beta
-  - variance sigma^2
-  - random effects alpha_j
-- Random-walk Metropolis step for tau
+  - variance $sigma^2$
+  - random effects $alpha_j$
+- Random-walk Metropolis step for $\tau$
 
 ---
 
