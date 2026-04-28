@@ -37,18 +37,31 @@ bayesian_analysis/
 ---
 
 ## Dataset
-- Source: European Environment Agency (EEA)
+
+- Source: European Environment Agency (EEA) air quality data
+- Country: Italy
 - Pollutant: PM2.5
-- Observations: ~31,000
-- Stations: ~116
+- Time period: 2025
+- Observations: 31,349
+- Monitoring stations: 116
 
 ### Preprocessing
-- Filtered by validity and verification
-- Log transformation applied:
-  y = log(PM2.5)
-- Derived features:
-  - month
-  - day_of_week
+
+The dataset was filtered to retain valid and verified PM2.5 observations. No missing or non-positive values were present in the final outcome variable.
+
+The response variable was log-transformed to reduce skewness:
+
+$$
+y = \log(\text{PM}_{2.5})
+$$
+
+Additional temporal covariates were derived from the observation date:
+
+- `month`
+- `day_of_week`
+
+The resulting panel is unbalanced, with the number of observations per station ranging from 69 to 332.
+
 ---
 
 ## Model Specification
