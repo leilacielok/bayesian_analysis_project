@@ -777,18 +777,49 @@ par(mfrow = c(1, 1))
 close_plot()
 ```
 
-## ESS + Visual Inspection
+## ESS 
 
-```{r acf-beta-alpha-representative, message=FALSE, warning=FALSE}
+```{r}
 library(coda)
+
+post <- readRDS("../paper/figures/post_samples.rds")
 
 mcmc_beta   <- mcmc(post$post_beta)
 mcmc_alpha  <- mcmc(post$post_alpha)
 mcmc_sigma2 <- mcmc(post$post_sigma2)
 mcmc_tau    <- mcmc(post$post_tau)
 
-ess_beta  <- effectiveSize(mcmc_beta)
-ess_alpha <- effectiveSize(mcmc_alpha)
+ess_beta   <- effectiveSize(mcmc_beta)
+ess_alpha  <- effectiveSize(mcmc_alpha)
+ess_sigma2 <- effectiveSize(mcmc_sigma2)
+ess_tau    <- effectiveSize(mcmc_tau)
+
+ess_all <- data.frame(
+  Parameter = c(
+    paste0("beta_", seq_along(ess_beta) - 1),
+    paste0("alpha_", seq_along(ess_alpha)),
+    "sigma2",
+    "tau"
+  ),
+  ESS = c(
+    as.numeric(ess_beta),
+    as.numeric(ess_alpha),
+    as.numeric(ess_sigma2),
+    as.numeric(ess_tau)
+  )
+)
+
+ess_all
+summary(ess_all$ESS)
+range(ess_all$ESS)
+ess_all[order(ess_all$ESS), ][1:10, ]
+```
+
+
+## Visual Inspection
+
+```{r acf-beta-alpha-representative, message=FALSE, warning=FALSE}
+library(coda)
 
 # Representative alphas: lowest, median, highest ESS
 alpha_idx <- c(
