@@ -164,7 +164,7 @@ $$
 \tilde{b} = \tilde{B} \left( B_0^{-1} b_0 + \frac{1}{\sigma^2} X^\top (y - \alpha) \right),
 $$
 
-with \(y\) denoting the the N-dimensional stacked outcome vector and α denoting the vector of station-specific effects replicated at the observation level.
+with \(y\) denoting the the N-dimensional stacked outcome vector and \(\alpha\) denoting the vector of station-specific effects replicated at the observation level.
 
 
 Similarly, each station-specific effect admits a Gaussian full conditional:
@@ -275,17 +275,17 @@ The results indicate that posterior inference is not materially driven by the sp
 
 ## Convergence diagnostics
 
-Trace plots of the post-burn-in chains for the variance and scale components (Figure \@ref(fig:fig-trace)) show no evidence of non-stationarity or systematic trends. Both chains fluctuate around stable levels, indicating satisfactory convergence of the Metropolis-within-Gibbs sampler.
+Trace plots of the post-burn-in chains for the variance components (Figure \@ref(fig:fig-trace)) show no evidence of non-stationarity or systematic trends. Both chains fluctuate around stable levels, indicating satisfactory convergence of the Metropolis-within-Gibbs sampler.
 
-```{r fig-trace, echo=FALSE, fig.cap="Post-burn-in trace plots for the variance and scale components.", fig.width=7, fig.height=5}
+```{r fig-trace, echo=FALSE, fig.cap="Post-burn-in trace plots for the variance components.", fig.width=7, fig.height=5}
 knitr::include_graphics("figures/trace_postburn.pdf")
 ```
 
 \FloatBarrier
 
-Autocorrelation functions for the variance and scale components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero thereafter, indicating efficient mixing for both components.
+Autocorrelation functions for the variance components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero thereafter, indicating efficient mixing for both components.
 
-```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance and scale components.", fig.width=7, fig.height=3.5}
+```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance components.", fig.width=7, fig.height=3.5}
 knitr::include_graphics("figures/acf_postburn.pdf")
 ```
 
