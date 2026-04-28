@@ -27,6 +27,8 @@ bayesian_analysis/
 │ ├── load_dataset.ipynb
 │ └── model_pm25.Rmd
 │
+├── pm_25_bayes.csv
+│
 ├── README.md
 └── .gitignore
 ```
