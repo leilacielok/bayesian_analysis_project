@@ -18,10 +18,6 @@ The objectives are to:
 ```
 bayesian_analysis/
 │
-├── data/
-│ ├── air_quality_complete_dataset.parquet
-│ └── metadata.xlsx
-│
 ├── paper/
 │ ├── figures/
 │ └── paper_pm25.pdf
