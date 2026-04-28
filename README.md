@@ -20,6 +20,7 @@ bayesian_analysis/
 │
 ├── paper/
 │ ├── figures/
+│ ├── paper_pm25.Rmd
 │ └── paper_pm25.pdf
 │
 ├── scripts/
