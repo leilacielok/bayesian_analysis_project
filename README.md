@@ -70,33 +70,38 @@ Inference is performed via MCMC sampling using a Metropolis-within-Gibbs algorit
   - random effects alpha_j
 - Random-walk Metropolis step for tau
 
-### Tuning
-- Proposal standard deviation tuned to achieve:
-  acceptance rate ≈ 20–40%
-- Final choice:
-  proposal_sd = 0.2
 ---
 
 ## Diagnostics
 
-The following diagnostics are performed:
-- Trace plots
-- Autocorrelation (ACF)
-- Effective Sample Size (ESS)
-- Geweke diagnostic
-- Posterior predictive checks (PPC)
+Convergence and mixing of the MCMC sampler are assessed using both graphical and numerical diagnostics:
+
+- **Trace plots** to verify stationarity of the chains after burn-in  
+- **Autocorrelation functions (ACF)** to evaluate mixing efficiency  
+- **Effective Sample Size (ESS)** to quantify the amount of independent information in the chains  
+- **Geweke diagnostic** to assess equality of early and late segments of the chain  
+- **Heidelberger–Welch diagnostic** to test stationarity and determine an appropriate burn-in period  
+- **Posterior predictive checks (PPC)** to evaluate model adequacy in reproducing key features of the data  
+
+Results indicate satisfactory convergence for all parameters. While some station-specific effects exhibit lower sampling efficiency, no evidence of pathological behavior or non-stationarity is detected.
 
 ---
 
 ## Results
 
-The model captures:
-- station-level heterogeneity
-- systematic temporal variation
-- improved fit after log transformation
+The model successfully captures the main sources of variation in PM2.5 concentrations:
 
-Posterior distributions show:
-- stable convergence
-- reasonable mixing
+- **Station-level heterogeneity**, through random effects capturing persistent local differences  
+- **Systematic temporal variation**, with a clear seasonal pattern and mild day-of-week effects  
+- **Improved distributional fit**, achieved via log transformation of the outcome  
+
+Posterior inference shows:
+
+- **Stable convergence** across all parameter blocks  
+- **Good mixing** for regression coefficients and variance components  
+- **Heterogeneous but acceptable ESS**, with lower values concentrated among some station-level effects  
+- **Strong posterior predictive performance**, with replicated data closely matching observed distributions and summary statistics  
+
+Overall, the Bayesian hierarchical specification provides a coherent and flexible framework for modeling air pollution dynamics in the presence of unbalanced panel data.
 
 ---
