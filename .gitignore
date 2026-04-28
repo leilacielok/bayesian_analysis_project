@@ -6,9 +6,10 @@ metadata.xlsx
 # R proj
 bayesian_analysis.Rproj
 scripts/model_pm25.pdf
-scripts/model_pm25.html
-scripts/model_pm25_revised_files
+*.html
+*_files/
 scripts/model_pm25_revised_cache
+scripts/model_pm25_files/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
