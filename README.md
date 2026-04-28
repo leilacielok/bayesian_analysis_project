@@ -1,12 +1,16 @@
 # Bayesian Hierarchical Modeling of Air Pollution
 
 ## Overview
-This project implements a Bayesian hierarchical model (BHM) to analyze air pollution data (PM2.5) across multiple monitoring stations in Italy. The focus is on multiparameter inference with hyperpriors, estimated via Markov Chain Monte Carlo (MCMC) methods.
 
-The objective is to:
-- capture heterogeneity across stations,
-- model temporal patterns (month, day-of-week),
-- study posterior behavior and convergence properties.
+This project implements a Bayesian hierarchical model (BHM) to analyze daily PM2.5 concentrations across multiple monitoring stations in Italy. The response variable is log-transformed to reduce skewness, and station-specific random effects are used to capture persistent heterogeneity across monitoring sites.
+
+The focus is on multiparameter Bayesian inference with hyperpriors, estimated through a custom Metropolis-within-Gibbs MCMC sampler.
+
+The objectives are to:
+
+- model temporal patterns in PM2.5 concentrations using month and day-of-week effects;
+- capture station-level heterogeneity through hierarchical random effects;
+- assess posterior behavior, convergence, and model adequacy using MCMC diagnostics and posterior predictive checks.
 
 ---
 
@@ -20,7 +24,7 @@ bayesian_analysis/
 │
 ├── paper/
 │ ├── figures/
-│ └── paper_pm25.Rmd
+│ └── paper_pm25.pdf
 │
 ├── scripts/
 │ ├── build_dataset.py
