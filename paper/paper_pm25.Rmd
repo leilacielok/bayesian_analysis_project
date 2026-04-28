@@ -32,9 +32,9 @@ Air pollution represents a major environmental and public health concern. Specif
 
 A key challenge in modeling $\text{PM}_{2.5}$ concentrations lies in the presence of substantial heterogeneity across monitoring stations and irregular temporal coverage. Stations differ significantly in terms of geographical characteristics, local emission sources, and environmental conditions, while observational data often exhibit an unbalanced panel structure, with varying numbers of observations across stations and missing time periods. As a result, direct comparisons across stations may be misleading, since observed differences can reflect both genuine site-specific pollution patterns and differences in the amount and timing of available data.
 
-In this context, Bayesian hierarchical models provide a natural and flexible framework to address these challenges. By introducing station-specific effects, they allow persistent differences across monitoring sites to be explicitly modeled, while still leveraging information from the entire dataset. This is particularly useful when some stations have limited observations, as it avoids relying exclusively on sparse local data and allows inference to be stabilized through partial pooling.
+In this context, Bayesian hierarchical models provide a natural and flexible framework for analyzing data with grouped and unbalanced structures. By modeling variation at multiple levels, they make it possible to account for systematic differences across observational units, while still leveraging information from the entire dataset. This is particularly useful when some stations have limited observations, as it avoids relying exclusively on sparse local data and allows inference to be stabilized through partial pooling.
 
-Building on these considerations, this paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy. Because the model includes a non-conjugate scale component, posterior inference is carried out using a Metropolis-within-Gibbs sampler, combining conjugate Gibbs updates with a Metropolis-Hastings step. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
+Building on these considerations, this paper develops a Bayesian hierarchical model for daily $\text{PM}_{2.5}$ concentrations observed across monitoring stations in Italy during 2025. Because the model includes a non-conjugate scale component, posterior inference is carried out using a Metropolis-within-Gibbs sampler, combining conjugate Gibbs updates with a Metropolis–Hastings step. The analysis focuses on model specification, MCMC implementation, convergence diagnostics, sensitivity analysis, and posterior predictive checks.
 
 # Data
 
@@ -54,7 +54,7 @@ knitr::include_graphics("figures/hist_log_pm25.pdf")
 
 \FloatBarrier 
 
-As is often the case in environmental monitoring networks, the resulting panel is markedly unbalanced. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Temporal coverage is also uneven across stations. While most stations provide observations for most of the year, 32 stations lack at least one full month of data, and for a few stations coverage drops to only 4 months. This heterogeneity is summarized in Figure \@ref(fig:fig-availability), which reports both the distribution of the number of observations per station and the distribution of the number of months observed per station. 
+As is often the case in environmental monitoring networks, the panel resulting from the preprocessing stage is markedly unbalanced. The number of observations per station ranges from 69 to 332, with a median of approximately 299. Temporal coverage is also uneven across stations. While most stations provide observations for most of the year, 32 stations lack at least one full month of data, and for a few stations coverage drops to only 4 months. This heterogeneity is summarized in Figure \@ref(fig:fig-availability), which reports both the distribution of the number of observations per station and the distribution of the number of months observed per station. 
 
 ```{r fig-availability, echo=FALSE, out.width="80%", fig.cap="Data availability by station.", fig.align='center'}
 knitr::include_graphics("figures/panel_structure_summary.pdf")
@@ -62,15 +62,11 @@ knitr::include_graphics("figures/panel_structure_summary.pdf")
 
 \FloatBarrier
 
-For the estimation of the Bayesian hierarchical model, only a restricted set of variables was retained from the cleaned dataset. The modelling dataset includes the log-transformed outcome variable, the station identifier, the month, and the day of the week. Observations with missing values in any of these variables were excluded from the modelling dataset, resulting in a complete-case sample. The variables `station_id`, `month`, and `day_of_week` were then treated as categorical factors.
-The corresponding design matrix includes an intercept, monthly indicators, and day-of-week indicators, while the station identifier is used to define the hierarchical grouping structure.
-
+For the subsequent empirical analysis, the cleaned dataset was restricted to the variables used in the empirical specification: the log-transformed PM$_{2.5}$ concentration, the station identifier, the month, and the day of the week. Observations with missing values in any of these variables were excluded, resulting in a complete-case sample. The variables `station_id`, `month`, and `day_of_week` were treated as categorical factors.
 
 # Model
 
-The hierarchical nature of the resulting complete-case dataset, together with the strong imbalance in the panel structure, naturally motivates a multilevel modeling approach. In particular, the uneven number of observations across stations and the presence of incomplete temporal coverage make standard time-series or pooled regression models potentially inefficient and biased, as they are unable to properly account for unobserved heterogeneity across monitoring sites.
-
-To address these issues, a Bayesian hierarchical specification is adopted, which allows for partial pooling across stations. This framework enables the model to borrow strength from the entire dataset while retaining station-specific components, thus providing robust inference even in the presence of sparse observations for some units.
+The strong imbalance in the panel structure and incomplete temporal coverage motivate a multilevel modeling approach in order to adequately capture unobserved heterogeneity across monitoring stations. A Bayesian hierarchical specification is adopted, allowing for partial pooling across stations and more stable inference in the presence of sparse observations.
 
 The covariates included in the model correspond to calendar effects. In particular, the fixed-effects design matrix is constructed as
 
@@ -83,12 +79,10 @@ so that the intercept is included by default together with monthly and day-of-we
 The likelihood is specified as:
 
 $$
-y_{it} \mid \beta, \alpha, \sigma^2 
-\sim 
-\mathcal{N}(x_{it}^\top \beta + \alpha_i, \sigma^2),
+y_{it} \mid \beta, \alpha, \sigma^2 \sim \mathcal{N}(x_{it}^\top \beta + \alpha_i, \sigma^2),
 $$
 
-where \(i\) indexes monitoring stations, \(t\) indexes the observation date, and \(x_{it}\) denotes the corresponding row of the fixed-effects design matrix \(X\). The coefficient vector \(\beta\) captures the calendar fixed effects, while \(\alpha_i\) is a station-specific random intercept accounting for time-invariant local characteristics.
+where $i$ indexes monitoring stations and $t$ indexes time. The vector $x_{it}$ contains the calendar covariates, $\beta$ is the vector of regression coefficients, and $\alpha_i$ is the station-specific intercept capturing unobserved heterogeneity.
 
 Equivalently, the model can be written as
 
@@ -97,23 +91,17 @@ y_{it} = x_{it}^\top \beta + \alpha_i + \varepsilon_{it},
 \quad \text{with } \varepsilon_{it} \sim \mathcal{N}(0, \sigma^2).
 $$
 
-## Hierarchical structure
-
-Station-specific effects are modeled as draws from a common Gaussian population distribution:
+To model cross-station variability, the random effects are specified hierarchically as
 
 $$
 \alpha_i \mid \tau \sim \mathcal{N}(0, \tau^2), \quad i = 1, \dots, J,
 $$
 
-where \(J\) is the number of monitoring stations and \(\tau^2\) captures the cross-station variability in baseline pollution levels.
-
-The assumption of a common Gaussian distribution reflects the idea that monitoring stations are exchangeable draws from a broader population of locations, once observed covariates are accounted for. This formulation allows the model to decompose variation in pollution levels into a systematic component (captured by \( x_{it}^\top \beta \)) and an unobserved station-specific component.
-
-The hierarchical structure induces partial pooling: stations with limited observations are shrunk toward the overall mean, while stations with richer data retain more idiosyncratic estimates. This feature is particularly important in the present setting, where the panel is highly unbalanced and some stations provide only sparse temporal coverage. Shrinkage improves estimation stability and prevents overfitting to noisy local patterns.
+where $\tau^2$ represents the variance of baseline pollution levels across stations. The zero mean centers the station effects around the overall baseline level captured by the intercept and calendar covariates, so that $\alpha_i$ represents a station-specific deviation. This specification induces partial pooling, shrinking estimates for sparsely observed stations toward the overall population mean.
 
 ## Prior specification
 
-Weakly informative priors are assigned to all parameters to regularize estimation while allowing the data to drive inference.
+Weakly informative priors are assigned to all parameters to regularize estimation while allowing the likelihood to dominate posterior inference.
 
 For the regression coefficients:
 
@@ -123,21 +111,20 @@ $$
 
 where \( B_0 = c I_p \) is a diagonal covariance matrix. This specification assumes prior independence across coefficients and imposes mild shrinkage toward zero, helping to stabilize estimation in the presence of potentially correlated temporal indicators.
 
-The observation variance is assigned the prior
+The observation variance is assigned the prior 
 
 $$
 \sigma^2 \sim \text{Inverse-Gamma}(a_\sigma, b_\sigma),
 $$
 
-which provides a conjugate prior facilitating posterior computation while remaining weakly informative for appropriate choices of hyperparameters.
+where the inverse-gamma distribution is parameterized in terms of shape and scale. This prior provides conjugacy and simplifies posterior computation, while remaining weakly informative for appropriate choices of hyperparameters.
 
-For the group-level standard deviation:
+The group-level scale parameter $\tau$ is assigned a half-Cauchy prior,
 
 $$
 \tau \sim \text{Half-Cauchy}(0, A_\tau).
 $$
-
-The use of a half-Cauchy prior for \( \tau \) avoids the well-known sensitivity of inverse-gamma priors for variance components, while providing weakly informative regularization.
+This choice provides weakly informative regularization for the scale of the random effects, allowing for substantial between-station variability while still shrinking implausibly large values. The heavy-tailed nature of the half-Cauchy distribution ensures that large values of $\tau$ remain a priori possible, avoiding overly restrictive assumptions on the degree of between-station heterogeneity.
 
 ## Posterior structure and MCMC estimation
 
@@ -161,7 +148,7 @@ p(\beta, \alpha, \sigma^2, \tau \mid y)
 \pi(\tau).
 $$
 
-Although the joint posterior does not admit a closed-form expression, most full conditional distributions are available in standard form, while the scale parameter \(\tau\) does not admit a conjugate full conditional distribution under the half-Cauchy prior and therefore requires a non-standard update.
+Although the joint posterior does not admit a closed-form expression, most full conditional distributions are available in closed form, while the scale parameter \(\tau\) does not admit a conjugate full conditional distribution under the half-Cauchy prior and therefore requires a non-standard update.
 
 In particular, conditional on \(\sigma^2\) and \(\tau\), the regression coefficients \(\beta\) follow a multivariate normal distribution:
 
@@ -177,7 +164,7 @@ $$
 \tilde{b} = \tilde{B} \left( B_0^{-1} b_0 + \frac{1}{\sigma^2} X^\top (y - \alpha) \right),
 $$
 
-with \(y\) denoting the stacked outcome vector and \(\alpha\) the vector of station-specific effects appropriately expanded to match the observation-level dimension.
+with \(y\) denoting the the N-dimensional stacked outcome vector and α denotes the vector of station-specific effects replicated at the observation level.
 
 Similarly, each station-specific effect admits a Gaussian full conditional:
 
@@ -239,9 +226,9 @@ Finally, convergence is assessed using both graphical (trace plots and autocorre
 
 To assess the robustness of posterior inference to prior calibration, a one-at-a-time sensitivity analysis is conducted. Starting from the baseline configuration \(c=100\), \(A_\tau=5\), and \(b_\sigma=0.5\), each hyperparameter is varied separately while holding the others fixed. For computational efficiency, the sensitivity runs are based on shorter auxiliary chains of 5,000 iterations, with the first 200 discarded as burn-in, which are sufficient for assessing the stability of posterior summaries.
 
-Sensitivity is evaluated with respect to three prior components: the prior variance of the regression coefficients ($c=10, 1000$), the scale of the half-Cauchy prior on the station-level standard deviation ($A_\tau=2.5, 10$), and, the inverse-gamma scale parameter for the observation variance ($b_\sigma=1$, with $a_\sigma=2$ fixed).
+Sensitivity is evaluated with respect to the three prior components: the prior variance of the regression coefficients ($c=10, 1000$), the scale of the half-Cauchy prior on the station-level standard deviation ($A_\tau=2.5, 10$), and, the inverse-gamma scale parameter for the observation variance ($b_\sigma=1$, with $a_\sigma=2$ fixed).
 
-As reported in Table \@ref(tab:sensitivity), posterior summaries are highly stable across all specifications. The posterior means of the intercept, $\sigma^2$, and $\tau$ rexhibit negligible variation, and acceptance rates for the Metropolis step on $\tau$ remain within a satisfactory range.
+As reported in Table \@ref(tab:sensitivity), posterior summaries are highly stable across all specifications. The posterior means of the intercept, $\sigma^2$, and $\tau$ exhibit negligible variation, and acceptance rates for the Metropolis step on $\tau$ remain within a satisfactory range.
 
 ```{r tab-sensitivity, echo=FALSE, warning=FALSE, message=FALSE, results='asis', cache=FALSE}
 library(knitr)
@@ -281,7 +268,7 @@ kable(
 
 \FloatBarrier
 
-The results indicates that posterior inference is not materially driven by the specific prior calibration, suggesting that the likelihood is sufficiently informative relative to the prior.
+The results indicate that posterior inference is not materially driven by the specific prior calibration, suggesting that the likelihood is sufficiently informative relative to the prior.
 
 # Results
 
@@ -295,7 +282,7 @@ knitr::include_graphics("figures/trace_postburn.pdf")
 
 \FloatBarrier
 
-Autocorrelation functions for the variance and scale components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero thereafter, indicating efficient mixing for the variance components.
+Autocorrelation functions for the variance and scale components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero thereafter, indicating efficient mixing for both components.
 
 ```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance and scale components.", fig.width=7, fig.height=3.5}
 knitr::include_graphics("figures/acf_postburn.pdf")
@@ -303,13 +290,13 @@ knitr::include_graphics("figures/acf_postburn.pdf")
 
 \FloatBarrier
 
-Autocorrelation functions were also inspected for representative regression coefficients and station-specific effects, selected according to their effective sample size in order to cover parameters with low, median, and high sampling efficiency. While some persistence  is observed at the first lags, especially for a subset of station-specific effects, autocorrelation decreases progressively and does not display long-range dependence. 
+Autocorrelation functions were also inspected for representative regression coefficients and station-specific effects, selected according to their effective sample size in order to cover parameters with low, median, and high sampling efficiency. While some persistence is observed at the first lags for a subset of station-specific effects, autocorrelation decreases progressively and does not display long-range dependence. 
 
-This behaviour is consistent with the effective sample size diagnostics computed for all monitored parameters: ESS values range from 101 to 2040, with a mean of about 401. Regression coefficients exhibit high sampling efficiency, with effective sample sizes typically ranging between approximately 1500 and 1600 for most parameters. The variance components also show very good mixing, with ESS values of about 1600 for \(\sigma^2\) and around 1200 for \(\tau\), whereas lower ESS values are concentrated among a subset of station-specific effects, which is expected in hierarchical models and does not indicate pathological behavior.
+This behaviour is consistent with the effective sample size diagnostics computed for all monitored parameters: ESS values range from 101 to 2040, with a mean of about 401. Regression coefficients exhibit high sampling efficiency, with effective sample sizes typically ranging between about 1500 and 1600 for most parameters. The variance components also show very good mixing, with ESS values of about 1600 for \(\sigma^2\) and around 1200 for \(\tau\), whereas lower ESS values are concentrated among a subset of station-specific effects, which is expected in hierarchical models and does not indicate pathological behavior.
 
-The Geweke diagnostic provides a more conservative assessment. Regression coefficients and variance components have $z$-scores with absolute values below 1.96. For the station-specific effects, 27 out of 116 parameters fall outside this range. The Geweke \(z\)-scores for this block range from approximately 0.50 to 2.71, with exceedances only on the upper side of the conventional threshold. These exceedances are concentrated among local random effects rather than structural parameters, and therefore suggest lower Monte Carlo stability for some station-level effects rather than a global failure of convergence.
+The Geweke diagnostic provides a more conservative assessment of convergence. Regression coefficients and variance components have $z$-scores with absolute values below 1.96. For the station-specific effects, 27 out of 116 parameters fall outside this range. The Geweke \(z\)-scores for this block range from approximately 0.50 to 2.71, with exceedances occurring only on the positive side of the conventional threshold. These exceedances are concentrated among local random effects rather than structural parameters, and therefore suggest lower Monte Carlo stability for some station-level effects rather than a global failure of convergence.
 
-The Heidelberger--Welch diagnostic was also used to assess stationarity and the adequacy of the burn-in period. The stationarity test is passed by all monitored parameters. The largest suggested starting point is iteration 1001, leading to a burn-in of 1000 iterations, which is adopted before thinning the chain. The half-width test is passed by 116 out of 136 parameters; again, the remaining failures are mainly concentrated among station-specific effects and indicate lower precision in estimating some local posterior means, consistently with the ESS and Geweke results.
+The Heidelberger--Welch diagnostic was also used to assess stationarity and the adequacy of the burn-in period. The stationarity test is passed by all monitored parameters. The largest suggested starting point is iteration 1001, leading to a burn-in of 1000 iterations, which is adopted prior to thinning. After discarding burn-in and retaining every fourth draw, the final posterior sample consists of 2250 draws. The half-width test is passed by 116 out of 136 parameters; again, the remaining failures are mainly concentrated among station-specific effects and indicate lower precision in estimating some local posterior means, consistently with the ESS and Geweke results.
 
 These results are summarized in Table \@ref(tab:diagnostics-summary).
 
@@ -413,7 +400,7 @@ kable(
 
 The reported credible intervals are 95% highest posterior density (HPD) intervals. Effects whose intervals exclude zero are interpreted as credibly different from the baseline category.
 
-The intercept represents the expected value of the log-transformed outcome for the reference category, namely January and Monday, at an average station. Its posterior mean is approximately r round(beta_mean[1], 3), corresponding to a baseline PM2.5 level of about `r round(exp(beta_mean[1]), 1)` on the original scale.
+The intercept represents the expected value of the log-transformed outcome for the reference category, namely January and Monday, at an average station. Its posterior mean is approximately `r round(beta_mean[1], 3)`, corresponding to a baseline PM2.5 level of about `r round(exp(beta_mean[1]), 1)` on the original scale.
 
 The posterior estimate of the residual variance is approximately `r round(mean(post$post_sigma2), 3)`, corresponding to a residual standard deviation of about `r round(sqrt(mean(post$post_sigma2)), 3)`. The posterior mean of the group-level scale parameter is approximately `r round(mean(post$post_tau), 3)`. Hence, the residual standard deviation is larger than the group-level standard deviation, indicating that within-station variability is more pronounced than persistent cross-station heterogeneity.
 
