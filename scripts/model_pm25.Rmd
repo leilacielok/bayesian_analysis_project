@@ -1363,7 +1363,7 @@ spatial_table <- lapply(names(area_draws), function(x) {
     Mean = mean(draws),
     `95% HPD lower` = hpd[1, "lower"],
     `95% HPD upper` = hpd[1, "upper"],
-    `Posterior probability > 0` = mean(draws > 0)
+    `Posterior probability` = mean(draws > 0)
   )
 }) %>%
   bind_rows() %>%
