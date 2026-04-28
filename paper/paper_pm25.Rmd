@@ -19,7 +19,7 @@ header-includes:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  out.width = "60%",  
+  out.width = "65%",  
   fig.align = "center"
 )
 ```
@@ -238,11 +238,11 @@ The algorithm therefore alternates between Gibbs updates for $\beta$, $\alpha$, 
 
 Hyperparameters are selected to induce weakly informative priors. For the regression coefficients, the prior covariance matrix is set to $B_0 = c I_p$, with baseline choice $c = 100$, implying a large prior variance and only mild shrinkage toward zero. For the observation variance, the inverse-gamma hyperparameters are fixed at $a_\sigma = 2$ and $b_\sigma = 0.5$, yielding a diffuse prior. The value $b_\sigma = 0.5$ is chosen to be consistent with the empirical scale of the log-transformed outcome (whose sample variance is approximately $0.47$), while remaining sufficiently weakly informative. The scale parameter of the half-Cauchy prior on $\tau$ is set to $A_\tau = 5$, allowing for substantial between-station variability while still providing regularization. The robustness of posterior inference to alternative hyperparameter choices is examined through a dedicated sensitivity analysis reported below.
 
-Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 10,000 iterations. Burn-in and thinning are applied as post-processing steps: the first 2,000 iterations are discarded and every 5th remaining draw is retained to reduce storage and autocorrelation.
+Posterior inference is performed using a Metropolis-within-Gibbs sampler run for 10,000 iterations. Burn-in and thinning are applied as post-processing steps. The burn-in period is selected using the Heidelberger–Welch diagnostic, which suggests discarding approximately 1,000 initial iterations based on stationarity considerations. Accordingly, the first 1,000 iterations are removed, and every 4th remaining draw is retained to reduce storage and autocorrelation.
 
 The Metropolis step for $\tau$ is implemented as a Gaussian random walk proposal on \(\log \tau\). After tuning, a proposal standard deviation of 0.20 is adopted, yielding an acceptance rate of approximately 0.37. Posterior summaries and diagnostic plots are essentially unaffected by alternative choices, so this specification is retained for the final MCMC run.
 
-Finally, convergence is assessed using both graphical (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic and the effective sample size.
+Finally, convergence is assessed using both graphical (trace plots and autocorrelation functions) and numerical diagnostics, including the Geweke statistic, the Heidelberger–Welch diagnostic, and the effective sample size.
 
 ### Sensitivity to prior specification {#sec:sensitivity}
 
@@ -304,7 +304,7 @@ knitr::include_graphics("figures/trace_postburn.pdf")
 
 \FloatBarrier
 
-Autocorrelation functions for the variance and scale components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero for subsequent lags, suggesting satisfactory mixing.
+Autocorrelation functions for the variance and scale components are reported in Figure \@ref(fig:fig-acf). For both $\sigma^2$ and $\tau$, autocorrelation declines rapidly after the first lag and remains close to zero thereafter, indicating efficient mixing for the variance components.
 
 ```{r fig-acf, echo=FALSE, fig.cap="Post-burn-in autocorrelation functions for the variance and scale components.", fig.width=7, fig.height=3.5}
 knitr::include_graphics("figures/acf_postburn.pdf")
@@ -312,36 +312,70 @@ knitr::include_graphics("figures/acf_postburn.pdf")
 
 \FloatBarrier
 
-Autocorrelation functions were also inspected for representative regression coefficients and station-specific effects, selected based on their effective sample size to capture parameters with low, median, and high mixing efficiency. While some persistence is observed at low lags for a subset of parameters, particularly among station effects, autocorrelation decays steadily and remains within acceptable bounds. This pattern is consistent with the effective sample size results, which indicate some heterogeneity in mixing across parameters but no evidence of pathological behavior.
+Autocorrelation functions were also inspected for representative regression coefficients and station-specific effects, selected according to their effective sample size in order to cover parameters with low, median, and high sampling efficiency. While some persistence  is observed at the first lags, especially for a subset of station-specific effects, autocorrelation decreases progressively and does not display long-range dependence. 
 
-The Geweke diagnostic further supports convergence. All regression coefficients have \(z\)-scores within the conventional interval \([-2,2]\). For the station-specific effects, only one out of 116 values falls slightly outside this range. This isolated exceedance does not suggest systematic non-stationarity, especially in light of the stable trace plots and rapidly decaying autocorrelation functions.
+This behaviour is consistent with the effective sample size diagnostics computed for all monitored parameters: ESS values range from 101 to 2040, with a mean of about 401. Regression coefficients exhibit high sampling efficiency, with effective sample sizes typically ranging between approximately 1500 and 1600 for most parameters. The variance components also show very good mixing, with ESS values of about 1600 for \(\sigma^2\) and around 1200 for \(\tau\), whereas lower ESS values are concentrated among a subset of station-specific effects, which is expected in hierarchical models and does not indicate pathological behavior.
 
-```{r tab-geweke, echo=FALSE, warning=FALSE, message=FALSE}
+The Geweke diagnostic provides a more conservative assessment. Regression coefficients and variance components have $z$-scores within the conventional interval $[-2,2]$. For the station-specific effects, 27 out of 116 parameters fall outside this range. The Geweke \(z\)-scores for this block range from approximately 0.50 to 2.71, with exceedances only on the upper side of the conventional threshold. These exceedances are concentrated among local random effects rather than structural parameters, and therefore suggest lower Monte Carlo stability for some station-level effects rather than a global failure of convergence.
+
+The Heidelberger--Welch diagnostic was also used to assess stationarity and the adequacy of the burn-in period. The stationarity test is passed by all monitored parameters. The largest suggested starting point is iteration 1001, leading to a burn-in of 1000 iterations, which is adopted before thinning the chain. The half-width test is passed by 116 out of 136 parameters; again, the remaining failures are mainly concentrated among station-specific effects and indicate lower precision in estimating some local posterior means, consistently with the ESS and Geweke results.
+
+```{r tab-diagnostics-summary, echo=FALSE, warning=FALSE, message=FALSE}
 library(knitr)
 library(dplyr)
 
 geweke_summary <- readRDS(file.path("figures/geweke_summary.rds"))
+heidelberg_summary <- readRDS(file.path("figures/heidelberg_summary.rds"))
 
-geweke_summary %>%
-  rename(
-    `Parameter block` = Parameter_block
+heidelberg_block <- heidelberg_summary %>%
+  mutate(
+    Parameter_block = case_when(
+      grepl("^beta", Parameter) ~ "$\\beta$",
+      grepl("^alpha", Parameter) ~ "$\\alpha$",
+      Parameter == "sigma2" ~ "$\\sigma^2$",
+      Parameter == "tau" ~ "$\\tau$",
+      TRUE ~ Parameter
+    )
   ) %>%
-  kable(
-    format = "latex",
-    booktabs = TRUE,
-    escape = FALSE,
-    caption = "(\\#tab:geweke) Summary of Geweke diagnostic z-scores by parameter block.",
-    align = "lccc",
-    position = "H"
+  group_by(Parameter_block) %>%
+  summarise(
+    `HW stationarity` = paste0(sum(stest == 1), "/", n()),
+    `HW half-width` = paste0(sum(htest == 1), "/", n()),
+    .groups = "drop"
   )
+
+diagnostics_summary <- geweke_summary %>%
+  rename(
+    `Parameter block` = Parameter_block,
+    `Geweke min` = Min,
+    `Geweke max` = Max
+  ) %>%
+  dplyr::select(`Parameter block`, `Geweke min`, `Geweke max`) %>%
+  left_join(
+    heidelberg_block %>%
+      dplyr::select(Parameter_block, `HW stationarity`, `HW half-width`),
+    by = c("Parameter block" = "Parameter_block")
+  )
+
+kable(
+  diagnostics_summary,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  digits = 3,
+  caption = "(\\#tab:diagnostics-summary) Summary of Geweke and Heidelberger--Welch diagnostics by parameter block.",
+  align = "lcccc",
+  position = "H"
+)
 ```
 
 
-Overall, the trace plots, autocorrelation functions, and Geweke diagnostics consistently indicate that the sampler mixes satisfactorily and provides reliable posterior draws for subsequent inference.
+Overall, the diagnostics indicate satisfactory convergence for the regression coefficients and variance components. Some station-specific effects display lower sampling efficiency and less stable Geweke statistics, but this behaviour is localized and consistent with the hierarchical structure of the model. Since the Heidelberger--Welch stationarity test is passed by all parameters and no persistent autocorrelation is observed, the posterior draws are considered adequate for the subsequent inferential analysis.
 
 ## Posterior inference
 
-The posterior estimates shown in Table \@ref(tab:posterior-effects) provide a clear characterization of the main sources of variation in PM2.5 concentrations.
+The posterior estimates shown in Table \@ref(tab:posterior-effects) provide a clear characterization of the main temporal patterns in PM2.5 concentrations.
+
 ```{r tab-coefficients, echo=FALSE, results='asis', warning=FALSE, message=FALSE}
 library(knitr)
 library(coda)
@@ -363,8 +397,10 @@ effects <- c(
 )
 
 tab <- data.frame(
-  Variable = c("Intercept (Jan, Mon)", "February", "March", "April", "May",
-               "June", "July", "August", "September", "October", "November", "December"),
+  Variable = c(
+    "Intercept (Jan, Mon)", "February", "March", "April", "May",
+    "June", "July", "August", "September", "October", "November", "December"
+  ),
   Mean = round(beta_mean[1:12], 3),
   `95\\% HPD interval` = CI[1:12],
   Effect = effects,
@@ -381,26 +417,24 @@ kable(
 )
 ```
 
-The reported credible intervals are 95\% highest posterior density (HPD) intervals. Effects whose intervals exclude zero are interpreted as credibly different from the baseline category.
+The reported credible intervals are 95% highest posterior density (HPD) intervals. Effects whose intervals exclude zero are interpreted as credibly different from the baseline category.
 
-The intercept represents the expected value of the log-transformed outcome for the reference category (January, Monday) at an average station. Its posterior mean is approximately 2.60, corresponding to a baseline PM2.5 level of about `r round(exp(2.608),1)` on the original scale. 
+The intercept represents the expected value of the log-transformed outcome for the reference category, namely January and Monday, at an average station. Its posterior mean is approximately r round(beta_mean[1], 3), corresponding to a baseline PM2.5 level of about `r round(exp(beta_mean[1]), 1)` on the original scale.
 
-In addition, the posterior estimate of the residual standard deviation exceeds the group-level standard deviation, indicating that within-station variability is larger than persistent cross-station heterogeneity. In other words, day-to-day fluctuations in PM2.5 concentrations within the same monitoring site appear to be more substantial than the average differences in baseline pollution levels across stations. 
+The posterior estimate of the residual variance is approximately `r round(mean(post$post_sigma2), 3)`, corresponding to a residual standard deviation of about `r round(sqrt(mean(post$post_sigma2)), 3)`. The posterior mean of the group-level scale parameter is approximately `r round(mean(post$post_tau), 3)`. Hence, the residual standard deviation is larger than the group-level standard deviation, indicating that within-station variability is more pronounced than persistent cross-station heterogeneity.
 
-At the same time, the group-level variation remains clearly non-negligible. This implies that, even after controlling for temporal effects, monitoring stations still differ in their structural pollution profiles. Such differences are consistent with the presence of persistent local factors, such as urban density, traffic exposure, industrial activity, and topographical or meteorological conditions.
+At the same time, the group-level variation remains non-negligible. This implies that, even after controlling for temporal effects, monitoring stations still differ in their structural pollution profiles. Such differences are consistent with persistent local factors, such as urban density, traffic exposure, industrial activity, topographical conditions, and local meteorological patterns.
 
-From a modeling perspective, this result supports the use of a hierarchical specification. Although most of the variation is driven by within-station dynamics, the station-level random effects capture an important component of systematic heterogeneity that would be overlooked in a fully pooled model.
-
+From a modeling perspective, this result supports the use of a hierarchical specification. Although much of the variation is driven by within-station dynamics, the station-level random effects capture a relevant component of systematic heterogeneity that would be overlooked in a fully pooled model.
 
 ### Temporal effects  
 
-The temporal coefficients reported in Table \@ref(tab:posterior-effects) are now interpreted in detail. A strong and clearly identifiable seasonal pattern emerges, as relative to January, nearly all months exhibit negative coefficients, indicating substantially lower pollution levels throughout most of the year.
+The temporal coefficients reported in Table \@ref(tab:posterior-effects) are now interpreted in detail. A clear seasonal pattern emerges: relative to January, most months exhibit negative coefficients, indicating lower PM2.5 concentrations during the rest of the year.
 
-The magnitude of these effects is substantively large: spring, summer, and early autumn months are associated with reductions often exceeding 30–50%. December and February appear statistically indistinguishable from January in posterior terms, as their credible intervals include zero, although their point estimates suggest slightly lower pollution levels.
-
+The magnitude of these effects is substantively large. March, April, May, July, August, September, October, and November show clear reductions relative to January, with estimated decreases ranging from approximately 30% to more than 55%. The largest reduction is observed in September, with a posterior mean effect of about `r round(100 * (exp(beta_mean[9]) - 1), 1)`%. February and December are statistically indistinguishable from January, as their HPD intervals include zero. June also shows a smaller but credibly negative effect, corresponding to an estimated reduction of about `r round(100 * (exp(beta_mean[6]) - 1), 1)`%.
 This pattern is consistent with well-known environmental mechanisms, including increased heating emissions and less favorable atmospheric dispersion conditions during colder months.
 
-For compactness, Table \@ref(tab:posterior-effects) reports only the intercept and monthly effects. The omitted day-of-week coefficients are generally small. Most of their 95\% HPD intervals include zero, with the exception of Saturday, which shows a small positive effect relative to Monday, approximately equal to 2.6\%. This suggests at most a weak day-of-week pattern once seasonal and station-level heterogeneity are accounted for.
+For compactness, Table \@ref(tab:posterior-effects) reports only the intercept and monthly effects. The omitted day-of-week coefficients are generally small. Most of their 95% HPD intervals include zero, with the exception of Saturday, which shows a small positive effect relative to Monday, approximately equal to `r round(100 * (exp(beta_mean[17]) - 1), 1)`%. This suggests at most a weak day-of-week pattern once seasonal and station-level heterogeneity are accounted for.
 
 ### Spatial effects
 
@@ -415,7 +449,7 @@ knitr::include_graphics("figures/station_random_effects_map.pdf")
 
 \FloatBarrier
 
-The spatial distribution reveals a clear North–South gradient in the station-level effects. Stations located in northern Italy tend to exhibit positive random effects, whereas southern stations display predominantly negative values, with central regions lying in between.
+The spatial distribution reveals a clear North–South gradient in the station-level effects. Stations located in northern Italy tend to exhibit positive random effects, whereas southern stations display predominantly negative values. Central regions lie between these two patterns, with an average effect close to zero.
 
 ```{r tab-spatial-alpha, echo=FALSE, results='asis', warning=FALSE, message=FALSE}
 library(knitr)
@@ -429,16 +463,17 @@ print(
     booktabs = TRUE,
     escape = TRUE,
     caption = "(\\#tab:spatial-alpha) Posterior summaries of average station effects by macro-area.",
-    align = "lccc"
+    align = "lccc",
+    position = "H"
   )
 )
 ```
 
 \FloatBarrier
 
-This pattern is confirmed by a posterior comparison of average station effects across macro-areas. The North–South difference is estimated at approximately 0.31 on the log scale, with a 95% credible interval entirely above zero. The posterior probability that the North exhibits higher baseline pollution than the South is effectively equal to one.
+This pattern is confirmed by a posterior comparison of average station effects across macro-areas. The posterior mean station effect is positive in the North, approximately 0.19, with a 95% credible interval entirely above zero. By contrast, the South shows a negative average effect, approximately -0.12, with a 95% credible interval entirely below zero. The Center has an average effect close to zero, and its credible interval includes zero.
 
-On the original scale, this corresponds to roughly a 36% higher structural level of $\text{PM}_{2.5}$ in the North relative to the South.
+The North--Center contrast is also credibly positive, with an estimated difference of about 0.21 on the log scale. Overall, these results support the presence of a marked geographical gradient in station-level baseline pollution.
 
 This evidence is consistent with well-documented geographical differences in pollution dynamics, including higher industrial intensity, traffic exposure, and less favorable atmospheric dispersion conditions in northern regions. At the same time, the dispersion of the station effects highlights substantial within-region heterogeneity, suggesting that local factors remain important determinants of air quality.
 
@@ -448,17 +483,17 @@ Overall, these results highlight the coexistence of broad geographical gradients
 
 Posterior predictive checks were performed to assess model adequacy. Replicated datasets were generated from the posterior distribution and compared to the observed data.
 
-```{r fig-ppc-density, echo=FALSE, fig.cap="Posterior predictive check for the log-transformed PM2.5 outcome.", fig.width=6.5, fig.height=5}
+```{r fig-ppc-density, echo=FALSE, fig.cap="Posterior predictive check for the log-transformed PM2.5 outcome."}
 knitr::include_graphics("figures/ppc_density.pdf")
 ```
 
-```{r fig-ppc-moments, echo=FALSE, fig.cap="Posterior predictive checks based on summary statistics. The observed mean and standard deviation fall well within the distribution of replicated values.", out.width="90%"}
+```{r fig-ppc-moments, echo=FALSE, fig.cap="Posterior predictive checks based on summary statistics."}
 knitr::include_graphics("figures/ppc_moments.pdf")
 ```
 
 \FloatBarrier
 
-The distribution of replicated means and standard deviations is broadly consistent with the observed values (see Figures 6 and 7), with the observed statistics lying well within the distribution of replicated values. This suggests that the model provides an adequate representation of the first two moments of the data.
+The distribution of replicated means and standard deviations closely matches the observed values (see Figures 6 and 7), with the observed statistics lying well within the distribution of replicated values. This suggests that the model provides an adequate representation of the first two moments of the data.
 
 Furthermore, the posterior predictive density aligns reasonably well with the empirical distribution of log-transformed PM2.5, although minor discrepancies are visible in the peak and tail regions. These differences are consistent with the Gaussian assumption and do not indicate major model misspecification.
 
