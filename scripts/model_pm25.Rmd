@@ -746,17 +746,80 @@ for (j in alpha_idx) {
 }
 ```
 
-## Choose burn in iterations
-```{r choose-burnin}
-burn_in <-2000
+## Heidelberger-Welch diagnostic for burn-in assessment
 
-post <- post_process_mcmc(mcmc_fit, burn_in = burn_in, thin = 5)
+```{r heidelberg-diagnostic, warning=FALSE, message=FALSE}
+library(coda)
+
+mcmc_full <- mcmc(
+  cbind(
+    mcmc_fit$beta,
+    mcmc_fit$alpha,
+    sigma2 = mcmc_fit$sigma2,
+    tau = mcmc_fit$tau
+  )
+)
+
+colnames(mcmc_full) <- c(
+  paste0("beta_", seq_len(ncol(mcmc_fit$beta)) - 1),
+  paste0("alpha_", seq_len(ncol(mcmc_fit$alpha))),
+  "sigma2",
+  "tau"
+)
+
+heidel_list <- lapply(seq_len(ncol(mcmc_full)), function(k) {
+  out <- heidel.diag(mcmc_full[, k])
+  
+  mat <- unclass(out)
+  df <- as.data.frame(mat)
+  
+  df$Parameter <- colnames(mcmc_full)[k]
+  df
+})
+
+heidel_df <- do.call(rbind, heidel_list)
+rownames(heidel_df) <- NULL
+
+# Suggested burn-in according to the stationarity test
+heidel_burnin <- max(heidel_df$start, na.rm = TRUE) - 1
+
+# Number of parameters passing the stationarity and half-width tests
+n_parameters <- nrow(heidel_df)
+n_pass_stationarity <- sum(heidel_df$stest == 1, na.rm = TRUE)
+n_pass_halfwidth <- sum(heidel_df$htest == 1, na.rm = TRUE)
+
+# Parameters failing the stationarity test
+heidel_failed_stationarity <- heidel_df[heidel_df$stest == 0, ]
+
+# Parameters failing the half-width test
+heidel_failed_halfwidth <- heidel_df[heidel_df$htest == 0, ]
+
+heidel_burnin
+n_pass_stationarity
+n_pass_halfwidth
+n_parameters
+heidel_failed_stationarity
+heidel_failed_halfwidth
+
+saveRDS(heidel_df, file = file.path(fig_dir, "heidelberg_summary.rds"))
+```
+
+## Choose burn in iterations
+
+```{r choose-burnin}
+# Burn-in chosen using the Heidelberger-Welch diagnostic.
+# A minimum of 500 iterations is retained as a conservative lower bound.
+burn_in <- max(500, heidel_burnin)
+
+post <- post_process_mcmc(mcmc_fit, burn_in = burn_in, thin = 4)
 
 saveRDS(post, file = file.path(fig_dir, "post_samples.rds"))
 
+burn_in
 post$accept_rate_tau
 ```
 
+## Trace plots post-burn in
 ```{r post-burnin-trace, fig.width=6, fig.height=3.5}
 save_base_plot("trace_postburn.pdf", 6, 3.5)
 
