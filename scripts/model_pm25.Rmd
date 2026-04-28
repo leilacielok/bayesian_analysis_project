@@ -969,7 +969,6 @@ beta_summary
 sigma2_summary
 tau_summary
 ```
-Inspection of the trace plots suggested only a short transient phase, so the first 200 iterations were discarded as burn-in. Residual autocorrelation remained for some parameters, especially the intercept and selected random effects; therefore, a mild thinning scheme (every 5th draw) was applied. The retained chains appeared stable, and the acceptance rate for the Metropolis-Hastings update of $\tau$ was satisfactory.
 
 ## HDI
 
@@ -1385,5 +1384,5 @@ saveRDS(spatial_table, file = file.path(fig_dir, "spatial_macroarea_table.rds"))
 ```
 
 
-The distribution of posterior station-level random effects reveals substantial heterogeneity across monitoring locations. The estimated effects range from approximately -1.04 to 0.57 on the log scale, corresponding to differences of roughly -65% to +77% in PM2.5 levels relative to the baseline. This indicates that geographical variation plays a major role in shaping air pollution patterns, even after controlling for temporal effects.
+The distribution of posterior station-level random effects reveals substantial heterogeneity across monitoring locations, but a clear positive difference between Northern and Southern Italy. This indicates that geographical variation plays a major role in shaping air pollution patterns, even after controlling for temporal effects.
 
